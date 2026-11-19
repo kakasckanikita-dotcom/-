@@ -38,13 +38,15 @@ func _physics_process(delta: float) -> void:
 		spd = 13.0 if d > 20.0 else 4.0
 		yaw = lerp_angle(yaw, atan2(-dir.x, -dir.z), minf(1.0, delta * 6.0))
 		velocity = dir * spd
+		var before := global_position
 		move_and_slide()
+		Game.world.ground_move(self, before)
 	else:
 		if called:
 			Game.play_at("neigh", global_position + Vector3(0, 1.8, 0), -2.0, randf_range(0.95, 1.05), 10.0)
 		called = false
 		velocity = Vector3.ZERO
-	global_position.y = 0.0
+		global_position.y = Game.world.ground(global_position.x, global_position.z)
 	_snort_t -= delta
 	if _snort_t <= 0.0:
 		_snort_t = randf_range(14.0, 30.0)

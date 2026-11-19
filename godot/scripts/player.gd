@@ -75,7 +75,7 @@ func _ready() -> void:
 	rig.add_child(pivot)
 	arm = SpringArm3D.new()
 	arm.spring_length = 4.2
-	arm.collision_mask = 1
+	arm.collision_mask = 1 | 16
 	arm.margin = 0.3
 	arm.position = Vector3(0.6, 0, 0)
 	pivot.add_child(arm)
@@ -121,6 +121,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if mount_dir != 0:
+		global_position.y = Game.world.ground(global_position.x, global_position.z)
 		_update_mounting(real)
 		_update_camera(real)
 		return
@@ -145,9 +146,11 @@ func _physics_process(delta: float) -> void:
 	# в «Глазе ястреба» герой двигался на 60 % скорости, а не на 25 %
 	var tf := pfac / maxf(Engine.time_scale, 0.01)
 	velocity = move_vel * tf
+	var before := global_position
 	move_and_slide()
 	move_vel = velocity / tf
-	global_position.y = 0.0
+	if not Game.world.ground_move(self, before):
+		move_vel = Vector3.ZERO
 
 	var speed := Vector2(move_vel.x, move_vel.z).length()
 	if speed > 0.6:
@@ -162,6 +165,11 @@ func _physics_process(delta: float) -> void:
 	model.animate(speed, real * pfac)
 	if mounted:
 		horse_model.rotation.y = horse_yaw
+		# конь наклоняется по склону
+		var fwd := Vector3(-sin(horse_yaw), 0, -cos(horse_yaw))
+		var gp := global_position
+		var pitch := atan2(Game.world.ground(gp.x + fwd.x * 1.1, gp.z + fwd.z * 1.1) - Game.world.ground(gp.x - fwd.x * 1.1, gp.z - fwd.z * 1.1), 2.2)
+		horse_model.rotation.x = lerpf(horse_model.rotation.x, pitch, minf(1.0, real * 8.0))
 		model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
 		horse_model.animate(speed, real * pfac)
 
@@ -179,7 +187,10 @@ func _physics_process(delta: float) -> void:
 		if l.global_position.distance_to(global_position) < 2.0:
 			Game.money += l.money
 			Game.ammo += l.ammo
-			Game.say("Обыскали тело: $%d, патроны +%d" % [l.money, l.ammo])
+			if l.title != "":
+				Game.say("%s: $%d" % [l.title, l.money], Game.GOOD)
+			else:
+				Game.say("Обыскали тело: $%d, патроны +%d" % [l.money, l.ammo])
 			Game.play("coin", -6.0)
 			l.queue_free()
 
@@ -298,7 +309,7 @@ func mark_at_screen(sp: Vector2) -> void:
 		return
 	var best = null
 	var bd := 70.0
-	for n in get_tree().get_nodes_in_group("npcs"):
+	for n in get_tree().get_nodes_in_group("npcs") + get_tree().get_nodes_in_group("animals"):
 		if n.dead or n.global_position.distance_to(global_position) > 120.0:
 			continue
 		var chest: Vector3 = n.global_position + Vector3(0, n.head_height() - 0.3, 0)
@@ -316,7 +327,7 @@ func mark_at_screen(sp: Vector2) -> void:
 ## Есть ли цель под прицелом (для красного перекрестия).
 func target_under_crosshair():
 	var from := cam.global_position
-	var hit: Dictionary = Game.world.ray(from, from - cam.global_basis.z * 120.0, 1 | 4, [get_rid()])
+	var hit: Dictionary = Game.world.ray(from, from - cam.global_basis.z * 120.0, 1 | 4 | 16, [get_rid()])
 	if not hit.is_empty() and hit["collider"].has_method("take_hit"):
 		return hit["collider"]
 	return null
@@ -343,7 +354,7 @@ func shoot() -> void:
 	if Game.touch_mode:
 		dir = _aim_assist(from, dir)
 	var to := from + dir * 200.0
-	var hit: Dictionary = Game.world.ray(from, to, 1 | 4, [get_rid(), horse.get_rid()])
+	var hit: Dictionary = Game.world.ray(from, to, 1 | 4 | 16, [get_rid(), horse.get_rid()])
 	var end := to
 	if not hit.is_empty():
 		end = hit["position"]
@@ -365,6 +376,7 @@ func shoot() -> void:
 	model.shoot_anim()
 	shake = 3.0
 	Game.world.alert_town(global_position)
+	Game.world.scare_animals(global_position, 70.0)
 	if Game.clip == 0:
 		get_tree().create_timer(0.3).timeout.connect(start_reload)
 
@@ -373,8 +385,9 @@ func shoot() -> void:
 func _aim_assist(from: Vector3, dir: Vector3) -> Vector3:
 	var best_dir := dir
 	var best := 0.1
-	for n in get_tree().get_nodes_in_group("npcs"):
-		if n.dead or n.kind == "folk" or (n.kind == "sheriff" and Game.wanted == 0):
+	for n in get_tree().get_nodes_in_group("npcs") + get_tree().get_nodes_in_group("animals"):
+		var nk = n.get("kind")
+		if n.dead or nk == "folk" or (nk == "sheriff" and Game.wanted == 0) or n.get("species") == "cow":
 			continue
 		var chest: Vector3 = n.global_position + Vector3(0, n.head_height() - 0.4, 0)
 		var to := chest - from
@@ -482,6 +495,7 @@ func _finish_dismount() -> void:
 	_col.shape = _shape_walk
 	_col.position.y = 0.95
 	move_and_collide(_side_pos())
+	global_position.y = Game.world.ground(global_position.x, global_position.z)
 	move_vel = Vector3.ZERO
 	velocity = Vector3.ZERO
 

@@ -3,6 +3,7 @@ extends Node3D
 
 var money := 5
 var ammo := 3
+var title := "" # «Шкура койота» и т.п.
 var t := 0.0
 var bag: Node3D
 

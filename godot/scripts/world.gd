@@ -28,7 +28,10 @@ const NpcScript := preload("res://scripts/npc.gd")
 const CampScript := preload("res://scripts/camp.gd")
 const LootScript := preload("res://scripts/loot.gd")
 const FxScript := preload("res://scripts/fx.gd")
+const AnimalScript := preload("res://scripts/animal.gd")
+const EagleScript := preload("res://scripts/eagle.gd")
 const GroundShader := preload("res://scripts/ground.gdshader")
+const TerrainScript := preload("res://scripts/terrain.gd")
 const WaterShader := preload("res://scripts/water.gdshader")
 
 var rng := RandomNumberGenerator.new()
@@ -42,6 +45,7 @@ var player: CharacterBody3D
 var horse: CharacterBody3D
 var hud: Control
 var law_t := 0.0
+var terrain: Node3D
 var _river_snd: AudioStreamPlayer3D
 var _music_explore := 0.0
 var _music_combat := 0.0
@@ -63,9 +67,9 @@ func _ready() -> void:
 	_static.collision_mask = 0
 	add_child(_static)
 	_build_roads()
-	_build_ground()
 	_build_towns()
 	_gen_camps()
+	_build_ground()
 	_gen_obstacles()
 	_build_mesas()
 
@@ -91,6 +95,7 @@ func _ready() -> void:
 			s.town = t
 	for c in camps:
 		populate_camp(c)
+	_spawn_animals()
 
 	_setup_audio()
 
@@ -172,8 +177,27 @@ func on_bridge(z: float) -> bool:
 	return false
 
 
+## Высота земли в точке (0 там, где рельеф ещё не построен).
+func ground(x: float, z: float) -> float:
+	return terrain.height(x, z) if terrain else 0.0
+
+
+## Перемещение по рельефу: ставит тело на землю и не пускает на склоны
+## круче ~45°. Возвращает false, если шаг отменён.
+func ground_move(body: Node3D, from: Vector3) -> bool:
+	var to := body.global_position
+	var h0 := ground(from.x, from.z)
+	var h1 := ground(to.x, to.z)
+	var dist := Vector2(to.x - from.x, to.z - from.z).length()
+	if dist > 0.001 and h1 - h0 > dist * 1.0 and h1 > 0.5:
+		body.global_position = Vector3(from.x, h0, from.z)
+		return false
+	body.global_position.y = h1
+	return true
+
+
 func in_water(p: Vector3) -> bool:
-	return absf(p.x - river_x(p.z)) < RIVER_W / 2.0 and not on_bridge(p.z)
+	return absf(p.x - river_x(p.z)) < RIVER_W / 2.0 + 1.0 and not on_bridge(p.z) and ground(p.x, p.z) < -0.3
 
 
 func _build_roads() -> void:
@@ -206,17 +230,13 @@ func _noise_tex(seed_v: int, freq: float, size := 256) -> NoiseTexture2D:
 
 
 func _build_ground() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(1800, 1800)
 	var gm := ShaderMaterial.new()
 	gm.shader = GroundShader
 	gm.set_shader_parameter("noise_small", _noise_tex(3, 0.02))
 	gm.set_shader_parameter("noise_big", _noise_tex(11, 0.01))
-	var g := MeshInstance3D.new()
-	g.mesh = plane
-	g.material_override = gm
-	g.position = Vector3(500, 0, 500)
-	add_child(g)
+	terrain = TerrainScript.new()
+	add_child(terrain)
+	terrain.build(self, gm)
 	for r in roads:
 		var road := Mk.strip(r, 7.0, 0.02, Color("a8845a"))
 		add_child(road)
@@ -228,10 +248,9 @@ func _build_ground() -> void:
 	while z <= WORLD + 400.0:
 		centers.append(Vector2(river_x(z), z))
 		z += 6.0
-	add_child(Mk.ribbon(centers, RIVER_W + 8.0, 0.015, Mk.mat(Color("6f7740"))))
 	var wm := ShaderMaterial.new()
 	wm.shader = WaterShader
-	add_child(Mk.ribbon(centers, RIVER_W, 0.05, wm))
+	add_child(Mk.ribbon(centers, RIVER_W + 4.0, terrain.WATER_Y, wm))
 	for bz in BRIDGES:
 		var bx := river_x(bz)
 		var bridge := Node3D.new()
@@ -389,7 +408,7 @@ func _gen_obstacles() -> void:
 			continue
 		var h := rng.randf_range(2.8, 5.5)
 		var gi := rng.randi_range(0, cactus_groups.size() - 1)
-		cactus_at[gi].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * h), _v3(p)))
+		cactus_at[gi].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * h), Vector3(p.x, ground(p.x, p.y) - 0.1, p.y)))
 		_collider(p, 0.12 * h, h)
 		obstacles.append([p, 0.15 * h])
 	for i in 180:
@@ -399,7 +418,7 @@ func _gen_obstacles() -> void:
 			continue
 		var gi := rng.randi_range(0, rock_groups.size() - 1)
 		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r * 2.2, r * 2.2 * rng.randf_range(0.7, 1.1), r * 2.2))
-		rock_at[gi].append(Transform3D(b, Vector3(p.x, -r * 0.15, p.y)))
+		rock_at[gi].append(Transform3D(b, Vector3(p.x, ground(p.x, p.y) - r * 0.25, p.y)))
 		_collider(p, r * 0.95, r * 1.5)
 		obstacles.append([p, r * 1.1])
 	for i in cactus_groups.size():
@@ -416,9 +435,9 @@ func _gen_obstacles() -> void:
 			continue
 		var s := rng.randf_range(0.6, 1.4)
 		if rng.randf() < 0.85:
-			tufts.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, 0.25 * s, p.y)))
+			tufts.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, ground(p.x, p.y) + 0.17 * s, p.y)))
 		else:
-			bushes.append(Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(p.x, 0.3 * s, p.y)))
+			bushes.append(Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(p.x, ground(p.x, p.y) + 0.2 * s, p.y)))
 	var tm := CylinderMesh.new()
 	tm.top_radius = 0.0
 	tm.bottom_radius = 0.16
@@ -494,7 +513,7 @@ func _collider(p: Vector2, r: float, h: float) -> void:
 	s.radius = r
 	s.height = h
 	cs.shape = s
-	cs.position = Vector3(p.x, h / 2.0, p.y)
+	cs.position = Vector3(p.x, ground(p.x, p.y) + h / 2.0, p.y)
 	_static.add_child(cs)
 
 
@@ -519,7 +538,7 @@ func _build_mesas() -> void:
 			3: p = Vector2(WORLD + off, t)
 		var w := rng.randf_range(70, 160)
 		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(w, w * rng.randf_range(0.6, 1.2), w))
-		at[i % groups.size()].append(Transform3D(b, Vector3(p.x, -2.0, p.y)))
+		at[i % groups.size()].append(Transform3D(b, Vector3(p.x, ground(p.x, p.y) - 2.0, p.y)))
 	for i in groups.size():
 		_mm_group(groups[i], at[i], false)
 	for wall in [[Vector3(500, 10, -2), Vector3(1100, 20, 4)], [Vector3(500, 10, WORLD + 2), Vector3(1100, 20, 4)], [Vector3(-2, 10, 500), Vector3(4, 20, 1100)], [Vector3(WORLD + 2, 10, 500), Vector3(4, 20, 1100)]]:
@@ -574,8 +593,9 @@ func check_camp(c: Node3D) -> void:
 
 
 func place_player(p: Vector3) -> void:
-	player.global_position = p
-	horse.global_position = p + Vector3(4, 0, 2)
+	player.global_position = Vector3(p.x, ground(p.x, p.z), p.z)
+	var hp := p + Vector3(4, 0, 2)
+	horse.global_position = Vector3(hp.x, ground(hp.x, hp.z), hp.z)
 	player.snap_camera()
 
 
@@ -599,7 +619,7 @@ func ray(from: Vector3, to: Vector3, mask: int, exclude: Array = []) -> Dictiona
 
 
 func has_los(a: Vector3, b: Vector3) -> bool:
-	return ray(a, b, 1).is_empty()
+	return ray(a, b, 1 | 16).is_empty()
 
 
 func alert_town(p: Vector3) -> void:
@@ -608,9 +628,75 @@ func alert_town(p: Vector3) -> void:
 			n.flee = 6.0
 
 
+# ---------- животные ----------
+func _open_spot(pad: float, town_pad := 140.0) -> Vector3:
+	for attempt in 60:
+		var p := Vector2(rng.randf_range(60, WORLD - 60), rng.randf_range(60, WORLD - 60))
+		if _free_spot(p, pad, town_pad) and ground(p.x, p.y) < 14.0:
+			return Vector3(p.x, ground(p.x, p.y), p.y)
+	return Vector3(500, 0, 500)
+
+
+func _spawn_animal(kind: String, p: Vector3) -> Node3D:
+	var a := AnimalScript.new()
+	a.setup(kind, Vector3(p.x, ground(p.x, p.z), p.z))
+	add_child(a)
+	return a
+
+
+func _spawn_animals() -> void:
+	for herd in 6: # стада вилорогов
+		var c := _open_spot(20.0)
+		var lead: Node3D = null
+		for i in randi_range(3, 5):
+			var a := _spawn_animal("pronghorn", c + Vector3(randf_range(-8, 8), 0, randf_range(-8, 8)))
+			if lead == null:
+				lead = a
+			else:
+				a.leader = lead
+	for pack in 4: # стаи койотов
+		var c := _open_spot(20.0)
+		var lead: Node3D = null
+		for i in 3:
+			var a := _spawn_animal("coyote", c + Vector3(randf_range(-5, 5), 0, randf_range(-5, 5)))
+			if lead == null:
+				lead = a
+			else:
+				a.leader = lead
+	for i in 14:
+		_spawn_animal("hare", _open_spot(5.0, 90.0))
+	for t in towns: # коровы пасутся за городом
+		var c: Vector2 = t["pos"]
+		for i in 5:
+			_spawn_animal("cow", Vector3(c.x + randf_range(-20, 20), 0, c.y - 52.0 + randf_range(-6, 6)))
+	for i in 4: # орлы в небе
+		var e := EagleScript.new()
+		e.center = Vector3(rng.randf_range(150, 850), 0, rng.randf_range(150, 850))
+		e.radius = rng.randf_range(40, 90)
+		e.height = rng.randf_range(40, 70)
+		add_child(e)
+
+
+func scare_animals(p: Vector3, radius: float) -> void:
+	for a in get_tree().get_nodes_in_group("animals"):
+		if a.global_position.distance_to(p) < radius:
+			a.scare()
+
+
+func drop_pelt(p: Vector3, money: int, animal_name: String) -> Node3D:
+	var l := LootScript.new()
+	l.position = p
+	l.money = money
+	l.ammo = 0
+	l.title = "Шкура " + animal_name
+	add_child(l)
+	return l
+
+
 func drop_loot(p: Vector3) -> void:
 	var l := LootScript.new()
 	l.position = p + Vector3(randf_range(-0.6, 0.6), 0, randf_range(-0.6, 0.6))
+	l.position.y = ground(l.position.x, l.position.z)
 	l.money = randi_range(3, 12)
 	l.ammo = randi_range(2, 6)
 	add_child(l)
@@ -701,6 +787,7 @@ func _update_law(delta: float) -> void:
 		var p := player.global_position + Vector3(cos(a), 0, sin(a)) * 160.0
 		p.x = clampf(p.x, 10, WORLD - 10)
 		p.z = clampf(p.z, 10, WORLD - 10)
+		p.y = ground(p.x, p.z)
 		var n := spawn_npc("lawman", p)
 		n.aggro = true
 		law_t = maxf(5.0, 14.0 - Game.wanted * 2.0)

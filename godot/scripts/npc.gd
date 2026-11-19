@@ -200,8 +200,11 @@ func _physics_process(delta: float) -> void:
 	if Game.world.in_water(global_position):
 		spd *= 0.5
 	velocity = mv * spd
+	var before := global_position
 	move_and_slide()
-	global_position.y = 0.0
+	if not Game.world.ground_move(self, before):
+		wt_t = 0.0 # упёрся в скалу — выбрать новую цель
+		strafe = -strafe
 	var real_speed := velocity.length()
 	model.rotation.y = lerp_angle(model.rotation.y, yaw, minf(1.0, delta * 10.0))
 	model.aiming = engage
