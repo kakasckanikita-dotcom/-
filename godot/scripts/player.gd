@@ -152,6 +152,7 @@ func _physics_process(delta: float) -> void:
 	model.animate(speed, real * pfac)
 	if mounted:
 		horse_model.rotation.y = horse_yaw
+		model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
 		horse_model.animate(speed, real * pfac)
 		hoof_t -= real * speed
 		if hoof_t <= 0.0 and speed > 1.0:
@@ -407,7 +408,7 @@ func mount() -> void:
 	_col.shape = _shape_ride
 	_col.position.y = 1.5
 	model.mounted = true
-	model.position.y = horse_model.seat_y - model.hip_y
+	model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
 	horse_model.visible = true
 	Game.play("horse", -6.0)
 
@@ -419,7 +420,7 @@ func dismount() -> void:
 	horse.visible = true
 	horse_model.visible = false
 	model.mounted = false
-	model.position.y = 0.0
+	model.position = Vector3.ZERO
 	_col.shape = _shape_walk
 	_col.position.y = 0.95
 	var side := Vector3(cos(horse_yaw), 0, -sin(horse_yaw)) * -1.6

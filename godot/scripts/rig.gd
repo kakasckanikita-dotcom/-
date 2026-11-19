@@ -56,8 +56,8 @@ func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) 
 	var xf := fix.transform * sx
 	var foot_p := xf * (_gp("LeftFoot") + _gp("RightFoot")) * 0.5
 	var hips_p := xf * _gp("Hips")
-	fix.position = Vector3(-hips_p.x, -foot_p.y + 0.07, -hips_p.z)
-	hip_y = hips_p.y - foot_p.y + 0.07
+	fix.position = Vector3(-hips_p.x, -foot_p.y + 0.1, -hips_p.z)
+	hip_y = hips_p.y - foot_p.y + 0.1
 	for mi in Models.meshes(inst):
 		if tint != Color.WHITE:
 			for si in mi.mesh.get_surface_count():
@@ -133,10 +133,11 @@ func animate(speed: float, delta: float) -> void:
 		gun.visible = aiming # в остальное время револьвер в кобуре
 	var L := -R
 	if mounted:
-		var tl := _aim("LeftUpLeg", "LeftLeg", F * 0.8 - U * 0.25 + L * 0.5)
-		_aim("LeftLeg", "LeftFoot", -U + F * 0.15 + L * 0.15, tl)
-		var tr := _aim("RightUpLeg", "RightLeg", F * 0.8 - U * 0.25 + R * 0.5)
-		_aim("RightLeg", "RightFoot", -U + F * 0.15 + R * 0.15, tr)
+		# бёдра обхватывают бока коня, голени висят вниз вдоль боков
+		var tl := _aim("LeftUpLeg", "LeftLeg", F * 0.35 - U * 0.55 + L * 0.7)
+		_aim("LeftLeg", "LeftFoot", -U - F * 0.15 + L * 0.12, tl)
+		var tr := _aim("RightUpLeg", "RightLeg", F * 0.35 - U * 0.55 + R * 0.7)
+		_aim("RightLeg", "RightFoot", -U - F * 0.15 + R * 0.12, tr)
 		var al := _aim("LeftArm", "LeftForeArm", -U * 0.6 + F * 0.5 + L * 0.2)
 		_aim("LeftForeArm", "LeftHand", F * 0.9 - U * 0.2, al)
 		_arm_right(0.0)

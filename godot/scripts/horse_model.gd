@@ -8,6 +8,7 @@ const LENGTH := 2.5
 var model: Node3D
 var phase := 0.0
 var seat_y := 1.3
+var seat_z := 0.35 # седло позади центра модели (вперёд — это −Z)
 var _base := Vector3.ZERO
 
 
@@ -22,14 +23,14 @@ func _ready() -> void:
 	model.position = Vector3(-a.get_center().x, -a.position.y, -a.get_center().z)
 	_base = model.position
 	seat_y = a.size.y * 0.66
+	seat_z = a.size.z * 0.14
 
 
 func _aabb() -> AABB:
-	var inv := global_transform.affine_inverse()
 	var res := AABB()
 	var first := true
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
-		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		var b: AABB = Models.mesh_box(mi.mesh, Models.rel_xf(mi, self))
 		res = b if first else res.merge(b)
 		first = false
 	return res
@@ -40,3 +41,8 @@ func animate(speed: float, delta: float) -> void:
 	phase += delta * (2.0 + speed * 0.85)
 	model.position = _base + Vector3(0, absf(sin(phase)) * 0.16 * k, 0)
 	rotation.x = sin(phase * 2.0) * 0.045 * k
+
+
+## Куда посадить всадника (в координатах родителя), hip_y — высота его бёдер.
+func rider_pos(yaw: float, hip_y: float) -> Vector3:
+	return Basis(Vector3.UP, yaw) * Vector3(0, seat_y - hip_y, seat_z)

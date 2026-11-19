@@ -4,8 +4,8 @@ render_mode diffuse_burley;
 
 uniform sampler2D noise_small : repeat_enable, filter_linear_mipmap;
 uniform sampler2D noise_big : repeat_enable, filter_linear_mipmap;
-uniform vec3 sand_a : source_color = vec3(0.63, 0.48, 0.32);
-uniform vec3 sand_b : source_color = vec3(0.76, 0.62, 0.43);
+uniform vec3 sand_a : source_color = vec3(0.58, 0.43, 0.29);
+uniform vec3 sand_b : source_color = vec3(0.69, 0.55, 0.38);
 uniform vec3 scrub : source_color = vec3(0.58, 0.54, 0.34);
 uniform vec3 redrock : source_color = vec3(0.74, 0.46, 0.31);
 

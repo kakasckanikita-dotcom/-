@@ -24,6 +24,28 @@ static func rel_xf(node: Node, root: Node) -> Transform3D:
 	return xf
 
 
+## Точные габариты меша по вершинам (коробка повёрнутого AABB бывает намного
+## больше самой детали — из-за этого камни «висели» над землёй).
+static func mesh_box(mesh: Mesh, xf: Transform3D) -> AABB:
+	if mesh == null:
+		return AABB()
+	var first := true
+	var res := AABB()
+	for si in mesh.get_surface_count():
+		var arr := mesh.surface_get_arrays(si)
+		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			var w := xf * v
+			if first:
+				res = AABB(w, Vector3.ZERO)
+				first = false
+			else:
+				res = res.expand(w)
+	if first:
+		return xf * mesh.get_aabb()
+	return res
+
+
 static func meshes(root: Node) -> Array:
 	return root.find_children("*", "MeshInstance3D", true, false)
 
@@ -37,7 +59,7 @@ static func _analyze(model: String, inst: Node3D, wrap: Node3D) -> Dictionary:
 	var full := AABB()
 	var first := true
 	for mi in meshes(inst):
-		var b: AABB = rel_xf(mi, wrap) * mi.get_aabb()
+		var b: AABB = mesh_box(mi.mesh, rel_xf(mi, wrap))
 		boxes.append([inst.get_path_to(mi), b])
 		full = b if first else full.merge(b)
 		first = false
@@ -126,7 +148,7 @@ static func parts(model: String, name_filter: String) -> Array:
 	for mi in meshes(inst):
 		if name_filter.is_empty() or mi.name.findn(name_filter) != -1:
 			var x := rel_xf(mi, wrap)
-			res.append({"name": String(mi.name), "mesh": mi.mesh, "xf": x, "aabb": x * mi.get_aabb()})
+			res.append({"name": String(mi.name), "mesh": mi.mesh, "xf": x, "aabb": mesh_box(mi.mesh, x)})
 	wrap.free()
 	return res
 

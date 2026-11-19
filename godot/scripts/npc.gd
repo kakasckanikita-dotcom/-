@@ -96,7 +96,7 @@ func rebuild() -> void:
 	model.build("npc", height, tint, kind != "folk")
 	if mounted:
 		model.mounted = true
-		model.position.y = horse_model.seat_y - model.hip_y
+		model.position = horse_model.rider_pos(yaw, model.hip_y)
 	if npc_name != "":
 		name_label = Label3D.new()
 		name_label.text = npc_name
@@ -205,6 +205,8 @@ func _physics_process(delta: float) -> void:
 	model.animate(real_speed, delta)
 	if horse_model:
 		horse_model.rotation.y = model.rotation.y
+		if not dead:
+			model.position = horse_model.rider_pos(model.rotation.y, model.hip_y)
 		horse_model.animate(real_speed, delta)
 
 

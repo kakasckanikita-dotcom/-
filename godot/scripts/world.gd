@@ -124,7 +124,8 @@ func _setup_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 90.0
+	sun.directional_shadow_max_distance = 55.0
+	sun.directional_shadow_blend_splits = true
 	sun.light_color = Color(1.0, 0.95, 0.85)
 	add_child(sun)
 	moon = DirectionalLight3D.new()
@@ -140,18 +141,18 @@ func _update_sky() -> void:
 	var elev := (h - 6.0) / 12.0 * PI # 0 на рассвете, PI/2 в полдень
 	sun.rotation = Vector3(-clampf(elev, -0.3, PI + 0.3), deg_to_rad(-35), 0)
 	var day_k := clampf(sin(elev) * 3.0, 0.0, 1.0)
-	sun.light_energy = day_k * 1.3
+	sun.light_energy = day_k * 1.0
 	sun.visible = day_k > 0.01
 	var dusk := clampf(1.0 - absf(sin(elev)) * 4.0, 0.0, 1.0) * day_k
 	sun.light_color = Color(1.0, 0.95, 0.85).lerp(Color(1.0, 0.6, 0.35), dusk)
 	moon.light_energy = dk * 0.35
 	moon.visible = dk > 0.01
 	sky_mat.sky_top_color = Color("3d74c4").lerp(Color("070b1c"), dk)
-	sky_mat.sky_horizon_color = Color("e6c9a2").lerp(Color("e08850"), dusk).lerp(Color("1a1d33"), dk)
+	sky_mat.sky_horizon_color = Color("d9bf9c").lerp(Color("e08850"), dusk).lerp(Color("1a1d33"), dk)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color("8a6a48").lerp(Color("0a0a12"), dk)
-	env.ambient_light_energy = lerpf(1.0, 0.18, dk)
-	env.fog_light_color = Color("d8bf98").lerp(Color("e08850"), dusk * 0.6).lerp(Color("10131f"), dk)
+	env.ambient_light_energy = lerpf(0.65, 0.18, dk)
+	env.fog_light_color = Color("b9a07c").lerp(Color("e08850"), dusk * 0.6).lerp(Color("10131f"), dk)
 
 
 # ---------- география ----------
