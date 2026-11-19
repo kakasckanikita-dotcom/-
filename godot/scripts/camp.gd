@@ -38,9 +38,25 @@ func _ready() -> void:
 	for k in 8:
 		var a := k / 8.0 * TAU
 		Mk.sphere(self, 0.18, Vector3(cos(a) * 0.9, 0.1, sin(a) * 0.9), Color("666060"))
-	for k in 3:
+	# фургон и припасы банды
+	var wa := r.randf() * TAU
+	var wagon := Models.prop("wagon", 5.5, "max", r.randf() * TAU)
+	wagon.position = Vector3(cos(wa), 0, sin(wa)) * 11.5
+	add_child(wagon)
+	var ws := Models.size_of(wagon)
+	var wcs := CollisionShape3D.new()
+	var wbs := BoxShape3D.new()
+	wbs.size = Vector3(maxf(ws.x, ws.z) * 0.7, ws.y, maxf(ws.x, ws.z) * 0.7)
+	wcs.shape = wbs
+	wcs.position = wagon.position + Vector3(0, ws.y / 2.0, 0)
+	body.add_child(wcs)
+	var loot_names := ["Box", "Box2", "Box3", "Barrel", "BigDynamite", "Box"]
+	for k in loot_names.size():
 		var a := r.randf() * TAU
-		Mk.box(self, Vector3(0.8, 0.8, 0.8), Vector3(cos(a) * 5.0, 0.4, sin(a) * 5.0), Color("7a5a36"), Vector3(0, r.randf() * TAU, 0))
+		var sz := 0.9 if loot_names[k] != "BigDynamite" else 0.7
+		var item := Models.group_prop("western", loot_names[k], sz, "max", r.randf() * TAU)
+		item.position = Vector3(cos(a), 0, sin(a)) * r.randf_range(4.0, 6.0)
+		add_child(item)
 	flame = Mk.sphere(self, 0.32, Vector3(0, 0.55, 0), Color("ff8a2a"))
 	flame.material_override = Mk.mat(Color("ff8a2a"), 1.0, 4.0)
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

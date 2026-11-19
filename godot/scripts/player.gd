@@ -3,7 +3,7 @@ extends CharacterBody3D
 ## стрельба через прицел, «Глаз ястреба» (замедление и залп по отмеченным).
 ## На ПК — мышь и клавиатура, на телефоне — сенсорные кнопки (touch.gd).
 
-const HumanoidScript := preload("res://scripts/humanoid.gd")
+const RigScript := preload("res://scripts/rig.gd")
 const HorseModelScript := preload("res://scripts/horse_model.gd")
 const BODY := Color("5a4632")
 const HAT := Color("4a3220")
@@ -57,9 +57,9 @@ func _ready() -> void:
 	_col.shape = _shape_walk
 	_col.position.y = 0.95
 	add_child(_col)
-	model = HumanoidScript.new()
+	model = RigScript.new()
 	add_child(model)
-	model.build(BODY, HAT, {"pants": Color("4a4038")})
+	model.build("hero", 1.82)
 	horse_model = HorseModelScript.new()
 	add_child(horse_model)
 	horse_model.visible = false
@@ -407,7 +407,7 @@ func mount() -> void:
 	_col.shape = _shape_ride
 	_col.position.y = 1.5
 	model.mounted = true
-	model.position.y = horse_model.seat_y - 0.95
+	model.position.y = horse_model.seat_y - model.hip_y
 	horse_model.visible = true
 	Game.play("horse", -6.0)
 

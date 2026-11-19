@@ -2,15 +2,15 @@ extends CharacterBody3D
 ## Любой персонаж, кроме героя: бандит, главарь, горожанин, шериф или конный
 ## помощник шерифа. Поведение зависит от вида и от розыска героя.
 
-const HumanoidScript := preload("res://scripts/humanoid.gd")
+const RigScript := preload("res://scripts/rig.gd")
 const HorseModelScript := preload("res://scripts/horse_model.gd")
 
 const KINDS := {
-	"bandit": {"hp": 100.0, "body": Color("7a2a1e"), "hat": Color("2b1d14"), "spd": 3.6, "dmg": 9.0, "cd": Vector2(1.0, 1.9)},
-	"leader": {"hp": 280.0, "body": Color("2a2a2a"), "hat": Color("111111"), "spd": 3.4, "dmg": 14.0, "cd": Vector2(0.6, 1.1)},
-	"folk": {"hp": 60.0, "body": Color("5e7aa0"), "hat": Color("9a7a50"), "spd": 1.8, "dmg": 0.0, "cd": Vector2(1.0, 1.0)},
-	"sheriff": {"hp": 150.0, "body": Color("3c3a35"), "hat": Color("c8b07a"), "spd": 3.8, "dmg": 12.0, "cd": Vector2(0.8, 1.4)},
-	"lawman": {"hp": 130.0, "body": Color("4b4a42"), "hat": Color("6b5a3a"), "spd": 12.0, "dmg": 11.0, "cd": Vector2(0.9, 1.6)},
+	"bandit": {"hp": 100.0, "tint": Color(1.0, 0.8, 0.75), "spd": 3.6, "dmg": 9.0, "cd": Vector2(1.0, 1.9)},
+	"leader": {"hp": 280.0, "tint": Color(0.5, 0.5, 0.55), "spd": 3.4, "dmg": 14.0, "cd": Vector2(0.6, 1.1)},
+	"folk": {"hp": 60.0, "tint": Color(0.85, 0.9, 1.0), "spd": 1.8, "dmg": 0.0, "cd": Vector2(1.0, 1.0)},
+	"sheriff": {"hp": 150.0, "tint": Color(0.8, 0.85, 0.95), "spd": 3.8, "dmg": 12.0, "cd": Vector2(0.8, 1.4)},
+	"lawman": {"hp": 130.0, "tint": Color(0.85, 0.85, 0.78), "spd": 12.0, "dmg": 11.0, "cd": Vector2(0.9, 1.6)},
 }
 
 var kind := "bandit"
@@ -29,8 +29,8 @@ var aggro := false
 var dead := false
 var dead_t := 0.0
 var flee := 0.0
-var body_col := Color.WHITE
-var hat_col := Color.BLACK
+var tint := Color.WHITE
+var height := 1.8
 var mounted := false
 var town = null
 var camp = null
@@ -47,8 +47,8 @@ func setup(k: String, pos: Vector3) -> void:
 	var d: Dictionary = KINDS[k]
 	hp = d["hp"]
 	max_hp = hp
-	body_col = d["body"]
-	hat_col = d["hat"]
+	tint = d["tint"]
+	height = randf_range(1.74, 1.88)
 	mounted = k == "lawman"
 	position = pos
 	home = pos
@@ -91,15 +91,12 @@ func rebuild() -> void:
 	if name_label:
 		name_label.queue_free()
 		name_label = null
-	model = HumanoidScript.new()
+	model = RigScript.new()
 	add_child(model)
-	var opts := {"gun": kind != "folk", "star": kind == "sheriff" or kind == "lawman", "bandana": kind == "bandit"}
-	if kind == "folk":
-		opts["pants"] = Color("5a4a3a")
-	model.build(body_col, hat_col, opts)
+	model.build("npc", height, tint, kind != "folk")
 	if mounted:
 		model.mounted = true
-		model.position.y = horse_model.seat_y - 0.95
+		model.position.y = horse_model.seat_y - model.hip_y
 	if npc_name != "":
 		name_label = Label3D.new()
 		name_label.text = npc_name
@@ -113,7 +110,7 @@ func rebuild() -> void:
 
 
 func head_height() -> float:
-	return 1.62 + (model.position.y if model else 0.0)
+	return height * 0.9 + (model.position.y if model else 0.0)
 
 
 func _physics_process(delta: float) -> void:

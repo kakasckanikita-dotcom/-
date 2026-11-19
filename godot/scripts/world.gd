@@ -8,8 +8,17 @@ const WORLD := 1000.0
 const RIVER_W := 18.0
 const BRIDGES := [490.0, 146.0, 845.0]
 const CAMP_NAMES := ["Овраг Гремучей Змеи", "Каньон Висельника", "Сухой Колодец", "Скалы Койота", "Старая Шахта", "Красный Утёс", "Ржавая Лощина", "Брод Мертвеца"]
-const FOLK_COLORS := ["5e7aa0", "8a6d9e", "9e6b4a", "6b8a5a", "a08a5e", "7a5050"]
-const BANDIT_COLORS := ["7a2a1e", "6a4a2a", "5a3a3a", "4a3a2a"]
+const FOLK_TINTS := [Color(0.75, 0.85, 1.0), Color(0.9, 0.8, 1.0), Color(1.0, 0.9, 0.75), Color(0.8, 1.0, 0.8), Color(1.0, 1.0, 0.85), Color(0.95, 0.8, 0.8)]
+const BANDIT_TINTS := [Color(1.0, 0.8, 0.75), Color(0.85, 0.75, 0.65), Color(0.8, 0.7, 0.7), Color(0.7, 0.65, 0.6)]
+## Модели зданий: [файл, наибольший размер, поворот, скрыть детали, высота вывески (доля)]
+const BUILD := {
+	"saloon": ["bank", 12.5, 0.0, ["Object_99"], 0.9],
+	"bank": ["bank", 12.5, 0.0, [], 0.0],
+	"store": ["store", 12.0, 0.0, [], 0.55],
+	"hotel": ["store", 12.0, 0.0, [], 0.55],
+	"sheriff": ["house", 11.5, 0.0, [], 0.62],
+	"house": ["house", 11.5, 0.0, [], 0.0],
+}
 const NAMES := {"saloon": "САЛУН", "store": "ЛАВКА", "sheriff": "ШЕРИФ", "bank": "БАНК", "hotel": "ГОСТИНИЦА", "house": ""}
 const WALL := {"saloon": "8a5a3a", "store": "7a6a4a", "sheriff": "6a6a72", "bank": "9a8a70", "hotel": "7a4a3a"}
 
@@ -71,7 +80,7 @@ func _ready() -> void:
 		for i in 7:
 			var n := spawn_npc("folk", _v3(t["pos"] + Vector2(rng.randf_range(-35, 35), rng.randf_range(-6, 6))))
 			n.town = t
-			n.body_col = Color(FOLK_COLORS[i % FOLK_COLORS.size()])
+			n.tint = FOLK_TINTS[i % FOLK_TINTS.size()]
 			n.rebuild()
 		var sh: Dictionary = t["buildings"].filter(func(b): return b["type"] == "sheriff")[0]
 		for i in 2:
@@ -244,65 +253,70 @@ func _make_town(town_name: String, c: Vector2) -> void:
 	var t := {"name": town_name, "pos": c, "r": 70.0, "buildings": []}
 	towns.append(t)
 	var north := ["saloon", "store", "sheriff", "house", "house"]
-	var south := ["house", "bank", "hotel", "house", "house"]
-	var street := Mk.box(self, Vector3(84, 0.02, 20), Vector3(c.x, 0.01, c.y), Color("a8845a"))
+	var south := ["house", "bank", "house", "hotel", "house"]
+	var street := Mk.box(self, Vector3(90, 0.02, 18), Vector3(c.x, 0.01, c.y), Color("a8845a"))
 	street.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for i in 5:
-		var x := c.x - 28.0 + i * 14.0
-		_building(t, north[i], Vector2(x, c.y - 18.0), 1.0)
-		_building(t, south[i], Vector2(x, c.y + 18.0), -1.0)
-	# бочки и коновязи для атмосферы
+		var x := c.x - 30.0 + i * 15.0
+		_building(t, north[i], x, c.y - 9.0, 1.0)
+		_building(t, south[i], x, c.y + 9.0, -1.0)
+	# церковь в конце улицы, дверью к городу
+	var church := Models.prop("church", 13.0, "max", PI)
+	church.position = Vector3(c.x + 56.0, 0, c.y)
+	add_child(church)
+	_box_collider(church.position, Models.size_of(church))
+	# водонапорная башня, дилижанс, бочки
+	var tower := Models.prop("tower", 11.0, "h")
+	tower.position = Vector3(c.x - 50.0, 0, c.y - 15.0)
+	add_child(tower)
+	_box_collider(tower.position, Models.size_of(tower) * Vector3(0.6, 1, 0.6))
+	var coach := Models.prop("stagecoach", 6.5, "max", 0.0)
+	coach.position = Vector3(c.x + 22.0, 0, c.y + 4.5)
+	add_child(coach)
+	_box_collider(coach.position, Models.size_of(coach))
 	for i in 6:
-		var bx := c.x + rng.randf_range(-38, 38)
-		var bz := c.y + (8.5 if i % 2 == 0 else -8.5)
-		Mk.cyl(self, 0.38, 0.42, 1.0, Vector3(bx, 0.5, bz), Color("6b4423"), 10)
-	for side in [-1.0, 1.0]:
-		var rail := Node3D.new()
-		rail.position = Vector3(c.x + side * 38.0, 0, c.y + 6.0 * side)
-		add_child(rail)
-		Mk.box(rail, Vector3(3.0, 0.12, 0.12), Vector3(0, 1.0, 0), Color("4a2e18"))
-		Mk.box(rail, Vector3(0.14, 1.0, 0.14), Vector3(-1.4, 0.5, 0), Color("4a2e18"))
-		Mk.box(rail, Vector3(0.14, 1.0, 0.14), Vector3(1.4, 0.5, 0), Color("4a2e18"))
+		var barrel := Models.group_prop("western", "Barrel", 0.9, "h", rng.randf() * TAU)
+		barrel.position = Vector3(c.x + rng.randf_range(-38, 38), 0, c.y + (7.5 if i % 2 == 0 else -7.5))
+		add_child(barrel)
+		_collider(Vector2(barrel.position.x, barrel.position.z), 0.4, 1.0)
 
 
-## face: +1 — фасад смотрит на юг (+Z), −1 — на север.
-func _building(t: Dictionary, type: String, center: Vector2, face: float) -> void:
-	var w := 11.0
-	var d := 12.0
-	var hgt := 5.0 if type != "hotel" else 8.0
+## Здание вдоль улицы. edge — z края улицы; face: +1 — фасад смотрит на юг (+Z).
+func _building(t: Dictionary, type: String, x: float, edge: float, face: float) -> void:
+	var spec: Array = BUILD[type]
+	var model := Models.prop(spec[0], spec[1], "max", spec[2], spec[3])
+	var sz := Models.size_of(model)
+	var cz := edge - face * (sz.z / 2.0 + 0.5)
 	var b := Node3D.new()
-	b.position = Vector3(center.x, 0, center.y)
+	b.position = Vector3(x, 0, cz)
 	b.rotation.y = 0.0 if face > 0.0 else PI
 	add_child(b)
-	var wall := Color(WALL.get(type, ["8a6440", "7a5532", "6e5038"][rng.randi_range(0, 2)]))
-	var roof := Color("4a3020")
-	Mk.box(b, Vector3(w, hgt, d), Vector3(0, hgt / 2.0, 0), wall)
-	Mk.box(b, Vector3(w + 0.6, 0.3, d + 0.6), Vector3(0, hgt + 0.1, 0), roof)
-	Mk.box(b, Vector3(w, 2.6, 0.3), Vector3(0, hgt + 1.2, d / 2.0), wall) # фальшфасад
-	Mk.box(b, Vector3(1.7, 2.6, 0.1), Vector3(0, 1.3, d / 2.0 + 0.02), Color("2a1a10"))
-	for wx in [-3.3, 3.3]:
-		Mk.box(b, Vector3(1.6, 1.4, 0.1), Vector3(wx, 2.3, d / 2.0 + 0.02), Color("2b3440"))
-		if type == "hotel":
-			Mk.box(b, Vector3(1.6, 1.4, 0.1), Vector3(wx, 5.6, d / 2.0 + 0.02), Color("2b3440"))
-	Mk.box(b, Vector3(w, 0.25, 3.0), Vector3(0, 0.12, d / 2.0 + 1.5), Color("7a5232"))
-	Mk.box(b, Vector3(w, 0.15, 3.2), Vector3(0, 3.3, d / 2.0 + 1.6), roof)
-	for px in [-5.2, 5.2]:
-		Mk.cyl(b, 0.1, 0.1, 3.3, Vector3(px, 1.65, d / 2.0 + 2.9), Color("4a2e18"), 6)
+	b.add_child(model)
 	var nm: String = NAMES[type]
-	if nm != "":
-		Mk.box(b, Vector3(7.5, 1.3, 0.12), Vector3(0, hgt + 1.2, d / 2.0 + 0.2), Color("e9d6ae"))
-		Mk.label(b, nm, Vector3(0, hgt + 1.2, d / 2.0 + 0.3), 90, Color("3a2412"))
-	var cs := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(w, hgt + 2.6, d)
-	cs.shape = shape
-	cs.position = Vector3(center.x, (hgt + 2.6) / 2.0, center.y)
-	_static.add_child(cs)
+	if nm != "" and spec[4] > 0.0:
+		var hy: float = sz.y * spec[4]
+		var w := 1.2 + nm.length() * 0.62
+		Mk.box(b, Vector3(w, 1.1, 0.1), Vector3(0, hy, sz.z / 2.0 + 0.12), Color("e9d6ae"))
+		Mk.label(b, nm, Vector3(0, hy, sz.z / 2.0 + 0.2), 80, Color("3a2412"))
+	if type == "sheriff":
+		var board := Models.prop("wanted", 2.6, "h", -PI / 2.0)
+		board.position = Vector3(3.2, 0, sz.z / 2.0 + 1.8)
+		b.add_child(board)
+	_box_collider(Vector3(x, 0, cz), sz)
 	var out := Vector3(0, 0, face) # наружу, к улице
-	var door := Vector3(center.x, 0, center.y) + out * (d / 2.0 + 1.6)
-	var data := {"type": type, "town": t, "door": door, "out": out, "rect": Rect2(center.x - w / 2.0, center.y - d / 2.0, w, d)}
+	var door := Vector3(x, 0, cz) + out * (sz.z / 2.0 + 1.5)
+	var data := {"type": type, "town": t, "door": door, "out": out, "rect": Rect2(x - sz.x / 2.0, cz - sz.z / 2.0, sz.x, sz.z)}
 	t["buildings"].append(data)
 	buildings.append(data)
+
+
+func _box_collider(pos: Vector3, size: Vector3) -> void:
+	var cs := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(maxf(size.x, 0.5), maxf(size.y, 0.5), maxf(size.z, 0.5))
+	cs.shape = shape
+	cs.position = pos + Vector3(0, size.y / 2.0, 0)
+	_static.add_child(cs)
 
 
 # ---------- лагеря и природа ----------
@@ -346,47 +360,46 @@ func _gen_camps() -> void:
 
 
 func _gen_obstacles() -> void:
-	var cactus: Array[Transform3D] = []
-	var arms_v: Array[Transform3D] = []
-	var arms_h: Array[Transform3D] = []
-	var rocks: Array[Transform3D] = []
-	var rock_cols: Array[Color] = []
+	# кактусы и камни из скачанных наборов, рисуются через MultiMesh
+	var cactus_groups := []
+	for n in ["Cactus1", "Cactus2", "Cactus3", "Cactus4"]:
+		var g := Models.group("western", n, 1.0, "h")
+		if not g.is_empty():
+			cactus_groups.append(g)
+	var rock_groups := []
+	for p in Models.parts("rocks", ""):
+		var g := Models.group("rocks", p["name"], 1.0)
+		if not g.is_empty():
+			rock_groups.append(g)
+	var cactus_at := []
+	for i in cactus_groups.size():
+		cactus_at.append([])
+	var rock_at := []
+	for i in rock_groups.size():
+		rock_at.append([])
 	for i in 320:
 		var p := Vector2(rng.randf_range(0, WORLD), rng.randf_range(0, WORLD))
 		if not _free_spot(p, 6.0):
 			continue
-		var s := rng.randf_range(0.7, 1.25)
-		var rot := rng.randf_range(0, TAU)
-		var base := Transform3D(Basis(Vector3.UP, rot).scaled(Vector3.ONE * s), _v3(p))
-		cactus.append(base * Transform3D(Basis(), Vector3(0, 2.0, 0)))
-		for side in [-1.0, 1.0]:
-			if rng.randf() < 0.6:
-				var hgt := rng.randf_range(1.4, 2.4)
-				arms_h.append(base * Transform3D(Basis(Vector3.BACK, PI / 2.0), Vector3(side * 0.55, hgt, 0)))
-				arms_v.append(base * Transform3D(Basis(), Vector3(side * 0.85, hgt + 0.6, 0)))
-		_collider(p, 0.4 * s, 4.0 * s)
-		obstacles.append([p, 0.5 * s])
+		var h := rng.randf_range(2.8, 5.5)
+		var gi := rng.randi_range(0, cactus_groups.size() - 1)
+		cactus_at[gi].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * h), _v3(p)))
+		_collider(p, 0.12 * h, h)
+		obstacles.append([p, 0.15 * h])
 	for i in 180:
 		var r := rng.randf_range(1.2, 5.0)
 		var p := Vector2(rng.randf_range(0, WORLD), rng.randf_range(0, WORLD))
 		if not _free_spot(p, r + 3.0):
 			continue
-		var b := Basis(Vector3.UP, rng.randf_range(0, TAU)).scaled(Vector3(r * 1.2, r * rng.randf_range(0.5, 0.9), r))
-		rocks.append(Transform3D(b, Vector3(p.x, r * 0.2, p.y)))
-		rock_cols.append(Color("8b7b6a").lerp(Color("a0684a"), rng.randf()))
-		_collider(p, r * 1.05, r * 1.5)
+		var gi := rng.randi_range(0, rock_groups.size() - 1)
+		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r * 2.2, r * 2.2 * rng.randf_range(0.7, 1.1), r * 2.2))
+		rock_at[gi].append(Transform3D(b, Vector3(p.x, -r * 0.15, p.y)))
+		_collider(p, r * 0.95, r * 1.5)
 		obstacles.append([p, r * 1.1])
-
-	var green := Color("3f6b33")
-	_multimesh(_cyl_mesh(0.38, 0.42, 4.0), cactus, green)
-	_multimesh(_cyl_mesh(0.24, 0.26, 1.3), arms_v, green)
-	_multimesh(_cyl_mesh(0.22, 0.22, 0.75), arms_h, green)
-	var rm := SphereMesh.new()
-	rm.radial_segments = 7
-	rm.rings = 4
-	rm.radius = 1.0
-	rm.height = 2.0
-	_multimesh(rm, rocks, Color.WHITE, rock_cols)
+	for i in cactus_groups.size():
+		_mm_group(cactus_groups[i], cactus_at[i], true, Color("55703f"))
+	for i in rock_groups.size():
+		_mm_group(rock_groups[i], rock_at[i], true)
 
 	# трава и сухие кусты (только вид, без столкновений)
 	var tufts: Array[Transform3D] = []
@@ -402,17 +415,17 @@ func _gen_obstacles() -> void:
 			bushes.append(Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(p.x, 0.3 * s, p.y)))
 	var tm := CylinderMesh.new()
 	tm.top_radius = 0.0
-	tm.bottom_radius = 0.28
-	tm.height = 0.5
+	tm.bottom_radius = 0.16
+	tm.height = 0.34
 	tm.radial_segments = 4
 	tm.rings = 1
-	_multimesh(tm, tufts, Color("7d7a3e"), [], false)
+	_multimesh(tm, tufts, Color("66642f"), [], false)
 	var bm := SphereMesh.new()
 	bm.radial_segments = 6
 	bm.rings = 3
 	bm.radius = 0.6
 	bm.height = 1.2
-	_multimesh(bm, bushes, Color("8a7a4a"), [], false)
+	_multimesh(bm, bushes, Color("6e6240"), [], false)
 
 
 func _cyl_mesh(rt: float, rb: float, h: float) -> CylinderMesh:
@@ -449,6 +462,26 @@ func _multimesh(mesh: Mesh, xforms: Array, c: Color, cols: Array = [], shadows :
 	add_child(mmi)
 
 
+## MultiMesh для каждой части группы; materials берутся из самой модели.
+func _mm_group(parts: Array, placements: Array, shadows: bool, color_override := Color(0, 0, 0, 0)) -> void:
+	if placements.is_empty():
+		return
+	for part in parts:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = part["mesh"]
+		mm.instance_count = placements.size()
+		for i in placements.size():
+			mm.set_instance_transform(i, placements[i] * part["xf"])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		if color_override.a > 0.0:
+			mmi.material_override = Mk.mat(color_override, 0.85)
+		if not shadows:
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mmi)
+
+
 func _collider(p: Vector2, r: float, h: float) -> void:
 	var cs := CollisionShape3D.new()
 	var s := CylinderShape3D.new()
@@ -460,24 +493,29 @@ func _collider(p: Vector2, r: float, h: float) -> void:
 
 
 func _build_mesas() -> void:
-	# столовые горы по краю карты и невидимые стены
-	var reds := [Color("a0583a"), Color("b8693f"), Color("8e4c34"), Color("c27a4c")]
-	for i in 70:
+	# горы по краю карты (из набора «Low Poly Western») и невидимые стены
+	var groups := []
+	for n in ["Mountain", "Mountain2", "Mountain3", "Mountain4"]:
+		var g := Models.group("western", n, 1.0)
+		if not g.is_empty():
+			groups.append(g)
+	var at := []
+	for g in groups:
+		at.append([])
+	for i in 80:
 		var side := i % 4
-		var t := rng.randf_range(-100, WORLD + 100)
-		var off := rng.randf_range(40, 160)
+		var t := rng.randf_range(-150, WORLD + 150)
+		var off := rng.randf_range(50, 190)
 		var p := Vector2(t, -off)
 		match side:
 			1: p = Vector2(t, WORLD + off)
 			2: p = Vector2(-off, t)
 			3: p = Vector2(WORLD + off, t)
-		var r := rng.randf_range(25, 70)
-		var h := rng.randf_range(25, 85)
-		var c: Color = reds[rng.randi_range(0, 3)]
-		var m := Mk.cyl(self, r * 0.85, r, h, Vector3(p.x, h / 2.0, p.y), c, 9)
-		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var top := Mk.cyl(self, r * 0.6, r * 0.85, h * 0.25, Vector3(p.x, h + h * 0.125, p.y), c.darkened(0.12), 9)
-		top.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var w := rng.randf_range(70, 160)
+		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(w, w * rng.randf_range(0.6, 1.2), w))
+		at[i % groups.size()].append(Transform3D(b, Vector3(p.x, -2.0, p.y)))
+	for i in groups.size():
+		_mm_group(groups[i], at[i], false)
 	for wall in [[Vector3(500, 10, -2), Vector3(1100, 20, 4)], [Vector3(500, 10, WORLD + 2), Vector3(1100, 20, 4)], [Vector3(-2, 10, 500), Vector3(4, 20, 1100)], [Vector3(WORLD + 2, 10, 500), Vector3(4, 20, 1100)]]:
 		var cs := CollisionShape3D.new()
 		var s := BoxShape3D.new()
@@ -504,7 +542,7 @@ func populate_camp(c: Node3D) -> void:
 		var a := randf() * TAU
 		var n := spawn_npc("bandit", c.position + Vector3(cos(a), 0, sin(a)) * randf_range(3, 7))
 		n.camp = c
-		n.body_col = Color(BANDIT_COLORS.pick_random())
+		n.tint = BANDIT_TINTS.pick_random()
 		n.rebuild()
 	if Game.bounty != null and Game.bounty["camp"] == c and not Game.bounty["done"]:
 		var l := spawn_npc("leader", c.position + Vector3(0, 0, 2))
