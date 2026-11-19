@@ -231,7 +231,7 @@ func _shoot_at(p, target: Vector3, d: float, dmg: float) -> void:
 	model.shoot_anim()
 	Game.world.fx.tracer(from, end)
 	Game.world.fx.muzzle(from)
-	Game.play("shot", clampf(-6.0 - d / 4.0, -30.0, -6.0), randf_range(0.8, 1.0))
+	Game.play_at("shot" if d < 55.0 else "shot_far", from, 0.0, randf_range(0.85, 1.05), 18.0)
 
 
 func take_hit(dmg: float, by_player: bool) -> void:
@@ -240,6 +240,8 @@ func take_hit(dmg: float, by_player: bool) -> void:
 	hp -= dmg
 	aggro = true
 	Game.world.fx.blood(global_position + Vector3(0, 1.3, 0))
+	if hp > 0.0 and kind != "folk":
+		Game.play_at("hurt", global_position + Vector3(0, 1.6, 0), -4.0, randf_range(0.85, 1.15), 10.0)
 	if by_player and kind in ["folk", "sheriff", "lawman"]:
 		if Game.wanted == 0:
 			Game.wanted = 1
@@ -261,6 +263,7 @@ func _die(by_player: bool) -> void:
 		model.mounted = false
 		model.position = Vector3(1.4, 0, 0)
 	model.set_dead(true)
+	Game.play_at("death", global_position + Vector3(0, 1.4, 0), -2.0, randf_range(0.9, 1.1), 10.0)
 	if name_label:
 		name_label.visible = false
 	if by_player:

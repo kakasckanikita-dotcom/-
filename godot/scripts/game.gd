@@ -100,18 +100,93 @@ func _setup_input() -> void:
 		InputMap.action_add_event("shoot", mb)
 
 
-# ---------- звук (синтезируется при запуске) ----------
+# ---------- звук ----------
+# Настоящие записи лежат в assets/sfx (сгенерированы ElevenLabs). Если файла
+# нет, звучит запасной синтезированный звук.
 const RATE := 22050
+const SFX_DIR := "res://assets/sfx/"
+const LOOPS := ["steps", "gallop", "hoof_walk", "wind", "crickets", "campfire", "saloon", "river", "music_explore", "music_combat"]
+## синоним игрового события -> файл
+const ALIAS := {"horse": "neigh", "coin": "coins", "bounty": "stinger", "mark": "click"}
+
+var _real := {}
+var _p3d: Array[AudioStreamPlayer3D] = []
+var _next3d := 0
+var _loops := {} # имя -> AudioStreamPlayer (петли без позиции)
+
+
+func sfx(sound: String) -> AudioStream:
+	var n: String = ALIAS.get(sound, sound)
+	if not _real.has(n):
+		var p := SFX_DIR + n + ".ogg"
+		_real[n] = load(p) if ResourceLoader.exists(p) else null
+		if _real[n] is AudioStreamOggVorbis:
+			_real[n].loop = n in LOOPS
+	if _real[n] != null:
+		return _real[n]
+	return _sounds.get(sound, null)
+
 
 func play(sound: String, vol_db := 0.0, pitch := 1.0) -> void:
-	if not _sounds.has(sound):
+	var st := sfx(sound)
+	if st == null:
 		return
 	var p := _players[_next]
 	_next = (_next + 1) % _players.size()
-	p.stream = _sounds[sound]
+	p.stream = st
 	p.volume_db = vol_db
 	p.pitch_scale = pitch
 	p.play()
+
+
+## Звук в точке мира: громкость и сторона зависят от положения слушателя.
+func play_at(sound: String, pos: Vector3, vol_db := 0.0, pitch := 1.0, range_m := 25.0) -> void:
+	var st := sfx(sound)
+	if st == null or world == null:
+		return
+	if _p3d.is_empty():
+		for i in 14:
+			var a := AudioStreamPlayer3D.new()
+			a.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+			a.max_distance = 400.0
+			world.add_child(a)
+			_p3d.append(a)
+	var a := _p3d[_next3d]
+	_next3d = (_next3d + 1) % _p3d.size()
+	a.stream = st
+	a.global_position = pos
+	a.unit_size = range_m
+	a.volume_db = vol_db
+	a.pitch_scale = pitch
+	a.play()
+
+
+## Петля без позиции (шаги, копыта, ветер, музыка): громкость задаётся каждый кадр.
+## vol_lin = 0 — тишина (петля ставится на паузу).
+func loop_set(sound: String, vol_lin: float, pitch := 1.0, bus_db := 0.0) -> void:
+	if not _loops.has(sound):
+		var st := sfx(sound)
+		if st == null or not (st is AudioStreamOggVorbis):
+			return
+		var p := AudioStreamPlayer.new()
+		p.stream = st
+		add_child(p)
+		_loops[sound] = p
+	var pl: AudioStreamPlayer = _loops[sound]
+	if vol_lin <= 0.001:
+		if pl.playing:
+			pl.stream_paused = true
+		return
+	pl.volume_db = linear_to_db(vol_lin) + bus_db
+	pl.pitch_scale = pitch
+	if not pl.playing:
+		pl.play()
+	pl.stream_paused = false
+
+
+func stop_all_loops() -> void:
+	for k in _loops:
+		_loops[k].stream_paused = true
 
 
 func _make_sounds() -> void:

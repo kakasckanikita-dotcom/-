@@ -7,6 +7,7 @@ var yaw := 0.0
 var called := false
 var horse_name := "Буран"
 var model: Node3D
+var _snort_t := 12.0
 
 
 func _ready() -> void:
@@ -39,8 +40,15 @@ func _physics_process(delta: float) -> void:
 		velocity = dir * spd
 		move_and_slide()
 	else:
+		if called:
+			Game.play_at("neigh", global_position + Vector3(0, 1.8, 0), -2.0, randf_range(0.95, 1.05), 10.0)
 		called = false
 		velocity = Vector3.ZERO
 	global_position.y = 0.0
+	_snort_t -= delta
+	if _snort_t <= 0.0:
+		_snort_t = randf_range(14.0, 30.0)
+		if p.global_position.distance_to(global_position) < 25.0:
+			Game.play_at("snort", global_position + Vector3(0, 1.6, 0), -6.0, randf_range(0.9, 1.1), 6.0)
 	model.rotation.y = yaw
 	model.animate(spd, delta)

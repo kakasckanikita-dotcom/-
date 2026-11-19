@@ -42,6 +42,9 @@ var player: CharacterBody3D
 var horse: CharacterBody3D
 var hud: Control
 var law_t := 0.0
+var _river_snd: AudioStreamPlayer3D
+var _music_explore := 0.0
+var _music_combat := 0.0
 
 var env: Environment
 var sky_mat: ProceduralSkyMaterial
@@ -88,6 +91,8 @@ func _ready() -> void:
 			s.town = t
 	for c in camps:
 		populate_camp(c)
+
+	_setup_audio()
 
 	var autosave := Timer.new()
 	autosave.wait_time = 10.0
@@ -682,6 +687,7 @@ func _process(delta: float) -> void:
 
 	_update_law(delta)
 	_update_sky()
+	_update_audio(delta)
 	player.lantern.light_energy = Game.darkness() * 1.1
 
 
@@ -710,3 +716,54 @@ func _update_law(delta: float) -> void:
 		if Game.evade > 25.0:
 			clear_wanted()
 			Game.say("Вы ушли от погони.", Game.GOOD)
+
+
+# ---------- звук окружения ----------
+func _setup_audio() -> void:
+	_river_snd = AudioStreamPlayer3D.new()
+	_river_snd.stream = Game.sfx("river")
+	_river_snd.unit_size = 10.0
+	_river_snd.max_distance = 90.0
+	add_child(_river_snd)
+	if _river_snd.stream:
+		_river_snd.play()
+	for b in buildings:
+		if b["type"] == "saloon":
+			var a := AudioStreamPlayer3D.new()
+			a.stream = Game.sfx("saloon")
+			a.unit_size = 7.0
+			a.max_distance = 70.0
+			a.position = b["door"] + Vector3(0, 1.5, 0) - b["out"] * 3.0
+			add_child(a)
+			if a.stream:
+				a.play()
+
+
+func _update_audio(delta: float) -> void:
+	var p := player
+	var dk := Game.darkness()
+	var pp := p.global_position
+	if _river_snd and _river_snd.stream:
+		_river_snd.global_position = Vector3(river_x(pp.z), 0.3, pp.z)
+	# шаги и копыта героя
+	var spd := Vector2(p.move_vel.x, p.move_vel.z).length()
+	var riding: bool = p.mounted and p.mount_dir == 0 and not p.dead
+	var walking: bool = not p.mounted and not p.dead and spd > 0.5
+	Game.loop_set("steps", clampf(spd / 4.6, 0.0, 1.0) * 0.55 if walking else 0.0, clampf(0.8 + spd * 0.06, 0.8, 1.2))
+	var gallop := clampf((spd - 5.0) / 3.0, 0.0, 1.0) if riding else 0.0
+	var walk := clampf(spd / 2.0, 0.0, 1.0) * (1.0 - gallop) if riding else 0.0
+	Game.loop_set("hoof_walk", walk * 0.6, clampf(spd / 1.8, 0.7, 1.6))
+	Game.loop_set("gallop", gallop * 0.7, clampf(spd / 13.0, 0.8, 1.25))
+	# окружение: ветер днём, сверчки ночью
+	Game.loop_set("wind", lerpf(0.32, 0.15, dk) * (1.3 if town_at(pp) == null else 0.7))
+	Game.loop_set("crickets", dk * 0.45)
+	# музыка: спокойная в поездках, напряжённая в перестрелке
+	var fight := false
+	for n in get_tree().get_nodes_in_group("npcs"):
+		if not n.dead and n.aggro and n.kind != "folk" and n.global_position.distance_to(pp) < 80.0 and (n.kind in ["bandit", "leader"] or Game.wanted > 0):
+			fight = true
+			break
+	_music_combat = move_toward(_music_combat, 0.5 if fight else 0.0, delta * (0.8 if fight else 0.15))
+	_music_explore = move_toward(_music_explore, 0.0 if fight else 0.28, delta * 0.12)
+	Game.loop_set("music_combat", _music_combat)
+	Game.loop_set("music_explore", _music_explore)

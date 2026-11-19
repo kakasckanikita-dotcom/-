@@ -164,10 +164,6 @@ func _physics_process(delta: float) -> void:
 		horse_model.rotation.y = horse_yaw
 		model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
 		horse_model.animate(speed, real * pfac)
-		hoof_t -= real * speed
-		if hoof_t <= 0.0 and speed > 1.0:
-			hoof_t = 4.0
-			Game.play("hoof", -14.0, randf_range(0.8, 1.1))
 
 	shoot_cd -= real * pfac
 	if reload_t > 0.0:
@@ -361,6 +357,7 @@ func shoot() -> void:
 			c.take_hit(dmg, true)
 		else:
 			Game.world.fx.dust(end)
+			Game.play_at("ricochet" if randf() < 0.35 else "impact", end, -4.0, randf_range(0.9, 1.15), 8.0)
 	var gp: Vector3 = model.gun_pos()
 	Game.world.fx.tracer(gp, end)
 	Game.world.fx.muzzle(gp)

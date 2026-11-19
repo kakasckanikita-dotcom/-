@@ -8,6 +8,7 @@ var known := false
 var seed_v := 0
 var flame: MeshInstance3D
 var light: OmniLight3D
+var fire_snd: AudioStreamPlayer3D
 var t := 0.0
 
 
@@ -65,6 +66,15 @@ func _ready() -> void:
 	light.light_color = Color(1.0, 0.6, 0.25)
 	light.omni_range = 18.0
 	add_child(light)
+	fire_snd = AudioStreamPlayer3D.new()
+	fire_snd.stream = Game.sfx("campfire")
+	fire_snd.unit_size = 5.0
+	fire_snd.max_distance = 60.0
+	fire_snd.volume_db = -4.0
+	fire_snd.position.y = 0.5
+	add_child(fire_snd)
+	if fire_snd.stream:
+		fire_snd.play()
 
 
 func _process(delta: float) -> void:
@@ -80,3 +90,8 @@ func set_cleared(v: bool) -> void:
 	timer = 0.0
 	flame.visible = not v
 	light.visible = not v
+	if fire_snd and fire_snd.stream:
+		if v:
+			fire_snd.stop()
+		elif not fire_snd.playing:
+			fire_snd.play()
