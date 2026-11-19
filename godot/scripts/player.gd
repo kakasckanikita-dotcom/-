@@ -1,13 +1,21 @@
-extends CharacterBody2D
-## Герой, Эли Брэнсон: ходьба и езда верхом, стрельба, перезарядка,
-## «Глаз ястреба» (замедление времени и залп по отмеченным целям).
+extends CharacterBody3D
+## Герой, Эли Брэнсон. Камера от третьего лица, ходьба и езда верхом,
+## стрельба через прицел, «Глаз ястреба» (замедление и залп по отмеченным).
+## На ПК — мышь и клавиатура, на телефоне — сенсорные кнопки (touch.gd).
 
+const HumanoidScript := preload("res://scripts/humanoid.gd")
+const HorseModelScript := preload("res://scripts/horse_model.gd")
 const BODY := Color("5a4632")
 const HAT := Color("4a3220")
 
-var horse: CharacterBody2D
-var ang := 0.0
-var horse_ang := 0.0
+var horse: CharacterBody3D
+var model: Node3D
+var horse_model: Node3D
+var yaw := 0.0 # камера
+var pitch := -0.25
+var face_yaw := 0.0 # куда смотрит герой
+var horse_yaw := 0.0
+var aim_t := 0.0
 var mounted := false
 var dead := false
 var dead_t := 0.0
@@ -19,37 +27,72 @@ var focus_on := false
 var marks: Array = []
 var exec_q: Array = []
 var exec_t := 0.0
-var move_vel := Vector2.ZERO
+var move_vel := Vector3.ZERO
 var shake := 0.0
 var flash := 0.0
 var last_town = null
 var hint := ""
-var cam: Camera2D
-var lantern: PointLight2D
-var _shape: CircleShape2D
+var hoof_t := 0.0
+var rig: Node3D
+var pivot: Node3D
+var arm: SpringArm3D
+var cam: Camera3D
+var lantern: OmniLight3D
+var _col: CollisionShape3D
+var _shape_walk: CapsuleShape3D
+var _shape_ride: CylinderShape3D
 
 
 func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 1 | 4
 	motion_mode = MOTION_MODE_FLOATING
-	var cs := CollisionShape2D.new()
-	_shape = CircleShape2D.new()
-	_shape.radius = 12.0
-	cs.shape = _shape
-	add_child(cs)
-	cam = Camera2D.new()
-	cam.position_smoothing_enabled = true
-	cam.position_smoothing_speed = 8.0
-	add_child(cam)
-	cam.make_current()
-	lantern = PointLight2D.new()
-	lantern.texture = Game.light_texture()
-	lantern.texture_scale = 2.6
-	lantern.color = Color(1.0, 0.85, 0.6)
-	lantern.energy = 0.0
+	_shape_walk = CapsuleShape3D.new()
+	_shape_walk.radius = 0.35
+	_shape_walk.height = 1.9
+	_shape_ride = CylinderShape3D.new()
+	_shape_ride.radius = 0.9
+	_shape_ride.height = 3.0
+	_col = CollisionShape3D.new()
+	_col.shape = _shape_walk
+	_col.position.y = 0.95
+	add_child(_col)
+	model = HumanoidScript.new()
+	add_child(model)
+	model.build(BODY, HAT, {"pants": Color("4a4038")})
+	horse_model = HorseModelScript.new()
+	add_child(horse_model)
+	horse_model.visible = false
+	rig = Node3D.new()
+	rig.top_level = true
+	add_child(rig)
+	pivot = Node3D.new()
+	pivot.position.y = 1.75
+	rig.add_child(pivot)
+	arm = SpringArm3D.new()
+	arm.spring_length = 4.2
+	arm.collision_mask = 1
+	arm.margin = 0.3
+	arm.position = Vector3(0.6, 0, 0)
+	pivot.add_child(arm)
+	cam = Camera3D.new()
+	cam.fov = 70.0
+	cam.far = 1600.0
+	arm.add_child(cam)
+	cam.current = true
+	lantern = OmniLight3D.new()
+	lantern.position = Vector3(0, 2.0, 0)
+	lantern.omni_range = 16.0
+	lantern.light_color = Color(1.0, 0.82, 0.55)
+	lantern.light_energy = 0.0
 	add_child(lantern)
 	add_to_group("player")
+	snap_camera()
+
+
+func snap_camera() -> void:
+	if rig:
+		rig.global_position = global_position
 
 
 func _physics_process(delta: float) -> void:
@@ -57,42 +100,64 @@ func _physics_process(delta: float) -> void:
 	clock += real
 	_update_focus(real)
 	var pfac := 0.6 if focus_on else 1.0
+	yaw -= Game.touch_look.x * 0.006
+	pitch -= Game.touch_look.y * 0.005
+	Game.touch_look = Vector2.ZERO
+	pitch = clampf(pitch, -1.1, 0.45)
 	flash = maxf(0.0, flash - real)
 	shake = maxf(0.0, shake - real * 30.0)
-	var vp := get_viewport()
-	var lead := (vp.get_mouse_position() - vp.get_visible_rect().size / 2.0) * 0.12
-	cam.offset = lead + Vector2(randf_range(-shake, shake), randf_range(-shake, shake))
+	aim_t -= real
 
 	if dead:
 		dead_t += real
 		if dead_t > 3.5:
 			Game.world.respawn_player()
-		queue_redraw()
+		_update_camera(real)
 		return
 
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var sprint := mounted and Input.is_action_pressed("sprint") and Game.stam > 0.0 and input != Vector2.ZERO
-	var sp := 150.0
+	if Game.touch_mode and Game.touch_move.length() > 0.05:
+		input = Game.touch_move
+	var dir := Basis(Vector3.UP, yaw) * Vector3(input.x, 0, input.y)
+	var sprint := mounted and Input.is_action_pressed("sprint") and Game.stam > 0.0 and input.length() > 0.1
+	var sp := 4.6
 	if mounted:
-		sp = 440.0 if sprint else 290.0
+		sp = 18.0 if sprint else 11.0
 	if Game.world.in_water(global_position):
-		sp *= 0.45
+		sp *= 0.5
 	if sprint:
-		Game.stam = maxf(0.0, Game.stam - real * pfac * 22.0)
+		Game.stam = maxf(0.0, Game.stam - real * pfac * 20.0)
 	else:
 		Game.stam = minf(100.0, Game.stam + real * 12.0)
-	var k := minf(1.0, real * pfac * (4.0 if mounted else 10.0))
-	move_vel = move_vel.lerp(input * sp, k)
+	var k := minf(1.0, real * pfac * (3.0 if mounted else 10.0))
+	move_vel = move_vel.lerp(dir * sp, k)
 	# move_and_slide использует замедленную дельту; компенсируем, чтобы
 	# в «Глазе ястреба» герой двигался на 60 % скорости, а не на 25 %
 	var tf := pfac / maxf(Engine.time_scale, 0.01)
 	velocity = move_vel * tf
 	move_and_slide()
 	move_vel = velocity / tf
+	global_position.y = 0.0
 
-	ang = (get_global_mouse_position() - global_position).angle()
-	if mounted and move_vel.length() > 20.0:
-		horse_ang = move_vel.angle()
+	var speed := Vector2(move_vel.x, move_vel.z).length()
+	if speed > 0.6:
+		var move_yaw := atan2(-move_vel.x, -move_vel.z)
+		horse_yaw = lerp_angle(horse_yaw, move_yaw, minf(1.0, real * 5.0))
+		if aim_t <= 0.0 and not focus_on:
+			face_yaw = lerp_angle(face_yaw, horse_yaw if mounted else move_yaw, minf(1.0, real * 12.0))
+	if aim_t > 0.0 or focus_on:
+		face_yaw = lerp_angle(face_yaw, yaw, minf(1.0, real * 20.0))
+	model.rotation.y = face_yaw
+	model.aiming = aim_t > 0.0 or focus_on
+	model.animate(speed, real * pfac)
+	if mounted:
+		horse_model.rotation.y = horse_yaw
+		horse_model.animate(speed, real * pfac)
+		hoof_t -= real * speed
+		if hoof_t <= 0.0 and speed > 1.0:
+			hoof_t = 4.0
+			Game.play("hoof", -14.0, randf_range(0.8, 1.1))
+
 	shoot_cd -= real * pfac
 	if reload_t > 0.0:
 		reload_t -= real * pfac
@@ -104,7 +169,7 @@ func _physics_process(delta: float) -> void:
 		Game.hp = minf(100.0, Game.hp + real * 3.0)
 
 	for l in get_tree().get_nodes_in_group("loot"):
-		if l.global_position.distance_to(global_position) < 30.0:
+		if l.global_position.distance_to(global_position) < 2.0:
 			Game.money += l.money
 			Game.ammo += l.ammo
 			Game.say("Обыскали тело: $%d, патроны +%d" % [l.money, l.ammo])
@@ -119,10 +184,24 @@ func _physics_process(delta: float) -> void:
 	hint = ""
 	var b = Game.world.near_door(global_position)
 	if b:
-		hint = "[E] " + b.NAMES[b.type]
-	elif not mounted and global_position.distance_to(horse.global_position) < 70.0:
-		hint = "[E] Сесть на коня"
-	queue_redraw()
+		hint = Game.world.NAMES[b["type"]]
+	elif not mounted and global_position.distance_to(horse.global_position) < 3.5:
+		hint = "Сесть на коня"
+	_update_camera(real)
+
+
+func _update_camera(real: float) -> void:
+	rig.global_position = rig.global_position.lerp(global_position, minf(1.0, real * 12.0))
+	rig.rotation = Vector3(0, yaw, 0)
+	pivot.rotation.x = pitch
+	var want_len := 6.0 if mounted else 4.2
+	var want_h := 2.7 if mounted else 1.75
+	if focus_on:
+		want_len *= 0.75
+	arm.spring_length = lerpf(arm.spring_length, want_len, minf(1.0, real * 4.0))
+	pivot.position.y = lerpf(pivot.position.y, want_h, minf(1.0, real * 4.0))
+	cam.h_offset = randf_range(-shake, shake) * 0.01
+	cam.v_offset = randf_range(-shake, shake) * 0.01
 
 
 func _update_focus(real: float) -> void:
@@ -145,8 +224,13 @@ func _update_focus(real: float) -> void:
 			var t = exec_q.pop_front()
 			if is_instance_valid(t) and not t.dead and Game.clip > 0 and not dead:
 				Game.clip -= 1
-				ang = (t.global_position - global_position).angle()
-				Game.world.fx.tracer(global_position, t.global_position)
+				var tp: Vector3 = t.global_position + Vector3(0, t.head_height() - 0.3, 0)
+				var to := tp - global_position
+				face_yaw = atan2(-to.x, -to.z)
+				model.rotation.y = face_yaw
+				aim_t = 1.0
+				Game.world.fx.tracer(model.gun_pos(), tp)
+				Game.world.fx.muzzle(model.gun_pos())
 				Game.play("shot", -2.0, randf_range(0.9, 1.1))
 				shake = 4.0
 				t.take_hit(150.0, true)
@@ -165,11 +249,21 @@ func cancel_focus(fire := false) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if Game.touch_mode and event is InputEventMouse:
+		return # на телефоне касания обрабатывает touch.gd
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		yaw -= event.relative.x * 0.0032
+		pitch -= event.relative.y * 0.0032
+		return
+	if event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		get_viewport().set_input_as_handled()
+		return
 	if dead:
 		return
 	if event.is_action_pressed("shoot"):
 		if focus_on:
-			_mark_target()
+			mark_at_screen(get_viewport().get_visible_rect().size / 2.0)
 		else:
 			shoot()
 	elif event.is_action_pressed("interact"):
@@ -190,22 +284,34 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.say("Тоник: концентрация восстановлена", Game.GOLD)
 
 
-func _mark_target() -> void:
+## Отметить цель «Глаза ястреба» ближе всего к точке экрана.
+func mark_at_screen(sp: Vector2) -> void:
 	if marks.size() >= Game.clip:
 		return
-	var m := get_global_mouse_position()
 	var best = null
-	var bd := 30.0
+	var bd := 70.0
 	for n in get_tree().get_nodes_in_group("npcs"):
-		if n.dead:
+		if n.dead or n.global_position.distance_to(global_position) > 120.0:
 			continue
-		var d: float = n.global_position.distance_to(m)
-		if d < bd:
+		var chest: Vector3 = n.global_position + Vector3(0, n.head_height() - 0.3, 0)
+		if cam.is_position_behind(chest):
+			continue
+		var d := cam.unproject_position(chest).distance_to(sp)
+		if d < bd and Game.world.has_los(cam.global_position, chest):
 			bd = d
 			best = n
 	if best:
 		marks.append(best)
 		Game.play("mark", -10.0)
+
+
+## Есть ли цель под прицелом (для красного перекрестия).
+func target_under_crosshair():
+	var from := cam.global_position
+	var hit: Dictionary = Game.world.ray(from, from - cam.global_basis.z * 120.0, 1 | 4, [get_rid()])
+	if not hit.is_empty() and hit["collider"].has_method("take_hit"):
+		return hit["collider"]
+	return null
 
 
 func shoot() -> void:
@@ -217,13 +323,58 @@ func shoot() -> void:
 		return
 	Game.clip -= 1
 	shoot_cd = 0.28
-	var spread := (0.06 if mounted else 0.03) + move_vel.length() / 6000.0
-	Game.world.fire(global_position, ang + randf_range(-spread, spread), true, 34.0, get_rid())
+	aim_t = 1.6
+	face_yaw = yaw
+	model.rotation.y = yaw
+	model.aiming = true
+	model.animate(0.0, 0.0)
+	var from := cam.global_position
+	var dir := -cam.global_basis.z
+	var spread := (0.012 if mounted else 0.005) + move_vel.length() / 1500.0
+	dir = dir.rotated(Vector3.UP, randf_range(-spread, spread)).rotated(cam.global_basis.x, randf_range(-spread, spread) * 0.6)
+	if Game.touch_mode:
+		dir = _aim_assist(from, dir)
+	var to := from + dir * 200.0
+	var hit: Dictionary = Game.world.ray(from, to, 1 | 4, [get_rid(), horse.get_rid()])
+	var end := to
+	if not hit.is_empty():
+		end = hit["position"]
+		var c = hit["collider"]
+		if c.has_method("take_hit"):
+			var dmg := 34.0
+			if end.y - c.global_position.y > c.head_height() - 0.15:
+				dmg *= 3.0
+				if not c.dead and c.hp <= dmg:
+					Game.say("Точно в голову!", Game.GOLD)
+			c.take_hit(dmg, true)
+		else:
+			Game.world.fx.dust(end)
+	var gp: Vector3 = model.gun_pos()
+	Game.world.fx.tracer(gp, end)
+	Game.world.fx.muzzle(gp)
 	Game.play("shot", -2.0, randf_range(0.9, 1.1))
-	shake = 4.0
+	shake = 3.0
 	Game.world.alert_town(global_position)
 	if Game.clip == 0:
 		get_tree().create_timer(0.3).timeout.connect(start_reload)
+
+
+## Помощь в прицеливании на телефоне: доводка к ближайшей цели в узком конусе.
+func _aim_assist(from: Vector3, dir: Vector3) -> Vector3:
+	var best_dir := dir
+	var best := 0.1
+	for n in get_tree().get_nodes_in_group("npcs"):
+		if n.dead or n.kind == "folk" or (n.kind == "sheriff" and Game.wanted == 0):
+			continue
+		var chest: Vector3 = n.global_position + Vector3(0, n.head_height() - 0.4, 0)
+		var to := chest - from
+		if to.length() > 90.0:
+			continue
+		var ang := dir.angle_to(to.normalized())
+		if ang < best:
+			best = ang
+			best_dir = to.normalized()
+	return best_dir
 
 
 func start_reload() -> void:
@@ -242,7 +393,7 @@ func interact() -> void:
 		Game.world.hud.open_building(b)
 	elif mounted:
 		dismount()
-	elif global_position.distance_to(horse.global_position) < 70.0:
+	elif global_position.distance_to(horse.global_position) < 3.5:
 		mount()
 
 
@@ -250,26 +401,31 @@ func mount() -> void:
 	mounted = true
 	horse.called = false
 	horse.visible = false
-	horse_ang = horse.ang
+	horse_yaw = horse.yaw
+	face_yaw = horse_yaw
 	global_position = horse.global_position
-	_shape.radius = 16.0
+	_col.shape = _shape_ride
+	_col.position.y = 1.5
+	model.mounted = true
+	model.position.y = horse_model.seat_y - 0.95
+	horse_model.visible = true
 	Game.play("horse", -6.0)
 
 
 func dismount() -> void:
 	mounted = false
 	horse.global_position = global_position
-	horse.ang = horse_ang
+	horse.yaw = horse_yaw
 	horse.visible = true
-	_shape.radius = 12.0
-	velocity = Vector2.from_angle(horse_ang + PI / 2.0) * 30.0 / get_physics_process_delta_time()
-	move_and_slide()
-	move_vel = Vector2.ZERO
-	velocity = Vector2.ZERO
-
-
-func take_hit(dmg: float, _by_player: bool) -> void:
-	hurt(dmg)
+	horse_model.visible = false
+	model.mounted = false
+	model.position.y = 0.0
+	_col.shape = _shape_walk
+	_col.position.y = 0.95
+	var side := Vector3(cos(horse_yaw), 0, -sin(horse_yaw)) * -1.6
+	move_and_collide(side)
+	move_vel = Vector3.ZERO
+	velocity = Vector3.ZERO
 
 
 func hurt(dmg: float) -> void:
@@ -279,7 +435,7 @@ func hurt(dmg: float) -> void:
 	last_hit = clock
 	flash = 0.35
 	shake = 6.0
-	Game.world.fx.blood(global_position)
+	Game.world.fx.blood(global_position + Vector3(0, 1.4, 0))
 	Game.play("hurt", -8.0)
 	if Game.hp <= 0.0:
 		Game.hp = 0.0
@@ -288,24 +444,13 @@ func hurt(dmg: float) -> void:
 		cancel_focus()
 		dead = true
 		dead_t = 0.0
+		model.set_dead(true)
 		Game.play("death", -4.0)
 
 
-func revive(at: Vector2) -> void:
+func revive(at: Vector3) -> void:
 	dead = false
+	model.set_dead(false)
 	global_position = at
-	move_vel = Vector2.ZERO
-	cam.reset_smoothing()
-
-
-func _draw() -> void:
-	if dead:
-		Gfx.corpse(self, Vector2.ZERO, ang, BODY, HAT)
-		return
-	if mounted:
-		Gfx.horse(self, Vector2.ZERO, horse_ang, Color("6b3e22"), false, clock)
-	Gfx.man(self, Vector2.ZERO, ang, BODY, HAT)
-	if hint != "":
-		var w := Gfx.text_width(hint, 14) + 16.0
-		draw_rect(Rect2(-w / 2.0, -50, w, 22), Color(0.12, 0.07, 0.03, 0.8))
-		Gfx.text(self, Vector2(0, -34), hint, 14, Game.CREAM)
+	move_vel = Vector3.ZERO
+	snap_camera()

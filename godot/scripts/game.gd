@@ -1,6 +1,6 @@
 extends Node
-## Глобальное состояние игры (автозагрузка «Game»): характеристики героя,
-## деньги, розыск, время суток, звуки и сохранение.
+## Глобальное состояние (автозагрузка «Game»): характеристики героя, деньги,
+## розыск, время суток, сенсорный ввод, звуки и сохранение.
 
 signal toast(text: String, color: Color)
 
@@ -11,6 +11,9 @@ const GOOD := Color(0.62, 0.88, 0.54)
 const BAD := Color(1.0, 0.54, 0.42)
 
 var world: Node = null
+var touch_mode := false
+var touch_move := Vector2.ZERO # от виртуального джойстика
+var touch_look := Vector2.ZERO # накопленный поворот камеры пальцем
 
 # --- герой ---
 var hp := 100.0
@@ -35,11 +38,11 @@ var bank_cd := 0.0
 var _sounds := {}
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
-var _light_tex: GradientTexture2D
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	touch_mode = OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios") or "--touch" in OS.get_cmdline_user_args()
 	_setup_input()
 	_make_sounds()
 	for i in 12:
@@ -52,31 +55,24 @@ func say(text: String, color := CREAM) -> void:
 	toast.emit(text, color)
 
 
-## 0 — день, 0.72 — глубокая ночь.
+## 0 — день, 1 — глубокая ночь.
 func darkness() -> float:
 	var h := game_time / 60.0
 	if h >= 7.0 and h < 18.0:
 		return 0.0
 	if h >= 18.0 and h < 21.0:
-		return (h - 18.0) / 3.0 * 0.72
+		return (h - 18.0) / 3.0
 	if h >= 5.0 and h < 7.0:
-		return (1.0 - (h - 5.0) / 2.0) * 0.72
-	return 0.72
+		return 1.0 - (h - 5.0) / 2.0
+	return 1.0
 
 
-func light_texture() -> Texture2D:
-	if _light_tex == null:
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
-		g.set_color(1, Color(1, 1, 1, 0))
-		_light_tex = GradientTexture2D.new()
-		_light_tex.gradient = g
-		_light_tex.width = 256
-		_light_tex.height = 256
-		_light_tex.fill = GradientTexture2D.FILL_RADIAL
-		_light_tex.fill_from = Vector2(0.5, 0.5)
-		_light_tex.fill_to = Vector2(1.0, 0.5)
-	return _light_tex
+## Нажатие игрового действия из кода (сенсорные кнопки).
+func press(action: String, pressed: bool) -> void:
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
 
 
 # ---------- управление ----------
@@ -87,7 +83,7 @@ func _setup_input() -> void:
 		"move_up": [KEY_W, KEY_UP], "move_down": [KEY_S, KEY_DOWN],
 		"interact": [KEY_E], "reload": [KEY_R], "focus": [KEY_SHIFT],
 		"sprint": [KEY_SPACE], "whistle": [KEY_H], "medkit": [KEY_Q],
-		"tonic": [KEY_F], "map": [KEY_M], "menu_close": [KEY_ESCAPE],
+		"tonic": [KEY_F], "map": [KEY_M, KEY_TAB], "menu_close": [KEY_ESCAPE],
 	}
 	for action in keys:
 		if InputMap.has_action(action):
@@ -104,7 +100,7 @@ func _setup_input() -> void:
 		InputMap.action_add_event("shoot", mb)
 
 
-# ---------- звук (синтезируется при запуске, файлов не нужно) ----------
+# ---------- звук (синтезируется при запуске) ----------
 const RATE := 22050
 
 func play(sound: String, vol_db := 0.0, pitch := 1.0) -> void:
@@ -119,7 +115,7 @@ func play(sound: String, vol_db := 0.0, pitch := 1.0) -> void:
 
 
 func _make_sounds() -> void:
-	_sounds["shot"] = _wav(_noise(0.22, 3.0, 0.35, 1.6))
+	_sounds["shot"] = _wav(_noise(0.25, 3.0, 0.35, 1.6))
 	_sounds["click"] = _wav(_noise(0.03, 1.0, 0.9, 0.6))
 	_sounds["reload"] = _wav(_concat([_noise(0.03, 1.0, 0.9, 0.5), _silence(0.12), _noise(0.03, 1.0, 0.9, 0.5), _silence(0.12), _noise(0.04, 1.0, 0.7, 0.6)]))
 	_sounds["hurt"] = _wav(_tone(180.0, 90.0, 0.25, 0.5, true))
@@ -129,6 +125,7 @@ func _make_sounds() -> void:
 	_sounds["coin"] = _wav(_concat([_tone(990.0, 990.0, 0.06, 0.3, false), _tone(1320.0, 1320.0, 0.12, 0.3, false)]))
 	_sounds["whistle"] = _wav(_concat([_tone(1400.0, 2100.0, 0.18, 0.35, false), _tone(2100.0, 1300.0, 0.25, 0.35, false)]))
 	_sounds["horse"] = _wav(_tone(420.0, 520.0, 0.1, 0.3, false))
+	_sounds["hoof"] = _wav(_noise(0.05, 2.0, 0.15, 0.7))
 	_sounds["bounty"] = _wav(_concat([_tone(523.0, 523.0, 0.12, 0.3, false), _tone(659.0, 659.0, 0.12, 0.3, false), _tone(784.0, 784.0, 0.3, 0.3, false)]))
 
 
@@ -193,10 +190,11 @@ func has_save() -> bool:
 func save_game() -> void:
 	if world == null or world.player == null or world.player.dead:
 		return
+	var p: Vector3 = world.player.global_position
 	var d := {
 		"money": money, "honor": honor, "kills": kills, "ammo": ammo, "clip": clip,
 		"medkits": medkits, "tonics": tonics, "game_time": game_time, "day": day,
-		"x": world.player.global_position.x, "y": world.player.global_position.y,
+		"x": p.x, "z": p.z,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -208,7 +206,7 @@ func load_game() -> bool:
 	if f == null:
 		return false
 	var d = JSON.parse_string(f.get_as_text())
-	if typeof(d) != TYPE_DICTIONARY:
+	if typeof(d) != TYPE_DICTIONARY or not d.has("z"):
 		return false
 	money = int(d.get("money", 40))
 	honor = int(d.get("honor", 0))
@@ -219,7 +217,7 @@ func load_game() -> bool:
 	tonics = int(d.get("tonics", 1))
 	game_time = float(d.get("game_time", 480.0))
 	day = int(d.get("day", 1))
-	world.place_player(Vector2(float(d.get("x", 1100.0)), float(d.get("y", 1300.0))))
+	world.place_player(Vector3(float(d["x"]), 0.0, float(d["z"])))
 	return true
 
 

@@ -1,62 +1,78 @@
-extends Node2D
-## Частицы (кровь, искры, дым), трассеры и метки «Глаза ястреба».
+extends Node3D
+## Трассеры, вспышки выстрелов и брызги (кровь, пыль).
 
-var parts: Array = []
-var tracers: Array = []
-
-
-func _ready() -> void:
-	z_index = 6
+var tracers: Array = [] # [меш, оставшееся время]
 
 
-func add(pos: Vector2, v: Vector2, life: float, col: Color, size: float) -> void:
-	if parts.size() < 600:
-		parts.append({"p": pos, "v": v, "life": life, "max": life, "c": col, "s": size})
+func tracer(a: Vector3, b: Vector3) -> void:
+	var len := a.distance_to(b)
+	if len < 0.2:
+		return
+	var m := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.03, 0.03, len)
+	m.mesh = bm
+	m.material_override = Mk.mat(Color(1.0, 0.85, 0.45), 0.5, 3.0)
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(m)
+	m.global_position = (a + b) / 2.0
+	var up := Vector3.UP if absf((b - a).normalized().dot(Vector3.UP)) < 0.98 else Vector3.RIGHT
+	m.look_at(b, up)
+	tracers.append([m, 0.12])
 
 
-func burst(pos: Vector2, col: Color, n: int, smin: float, smax: float, life: float, size: float, dir := 0.0, spread := PI) -> void:
-	for i in n:
-		add(pos, Vector2.from_angle(dir + randf_range(-spread, spread)) * randf_range(smin, smax), life, col, size)
+func muzzle(p: Vector3) -> void:
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.8, 0.4)
+	l.light_energy = 3.0
+	l.omni_range = 6.0
+	add_child(l)
+	l.global_position = p
+	tracers.append([l, 0.06])
 
 
-func blood(pos: Vector2) -> void:
-	burst(pos, Color("8a1a10"), 8, 20.0, 90.0, 0.5, 3.0)
+func burst(p: Vector3, col: Color, n: int, spd := 3.0) -> void:
+	var cp := CPUParticles3D.new()
+	cp.one_shot = true
+	cp.amount = n
+	cp.lifetime = 0.6
+	cp.explosiveness = 1.0
+	cp.direction = Vector3.UP
+	cp.spread = 70.0
+	cp.initial_velocity_min = spd * 0.4
+	cp.initial_velocity_max = spd
+	cp.gravity = Vector3(0, -9.8, 0)
+	cp.scale_amount_min = 0.6
+	cp.scale_amount_max = 1.4
+	var sm := SphereMesh.new()
+	sm.radius = 0.05
+	sm.height = 0.1
+	sm.radial_segments = 4
+	sm.rings = 2
+	sm.material = Mk.mat(col)
+	cp.mesh = sm
+	add_child(cp)
+	cp.global_position = p
+	cp.emitting = true
+	get_tree().create_timer(1.5, false).timeout.connect(cp.queue_free)
 
 
-func muzzle(pos: Vector2, ang: float) -> void:
-	burst(pos + Vector2.from_angle(ang) * 22.0, Color("ffd27a"), 4, 40.0, 120.0, 0.25, 3.0, ang, 0.5)
+func blood(p: Vector3) -> void:
+	burst(p, Color("8a1a10"), 14)
 
 
-func tracer(a: Vector2, b: Vector2) -> void:
-	tracers.append({"a": a, "b": b, "life": 0.15})
+func dust(p: Vector3) -> void:
+	burst(p, Color("b89a70"), 8, 2.0)
 
 
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.01)
-	for i in range(parts.size() - 1, -1, -1):
-		var p: Dictionary = parts[i]
-		p["p"] += p["v"] * delta
-		p["v"] *= 0.92
-		p["life"] -= delta
-		if p["life"] <= 0.0:
-			parts.remove_at(i)
 	for i in range(tracers.size() - 1, -1, -1):
-		tracers[i]["life"] -= real
-		if tracers[i]["life"] <= 0.0:
+		var tr: Array = tracers[i]
+		tr[1] -= real
+		if tr[1] <= 0.0:
+			tr[0].queue_free()
 			tracers.remove_at(i)
-	queue_redraw()
-
-
-func _draw() -> void:
-	for p in parts:
-		var c: Color = p["c"]
-		c.a *= clampf(p["life"] / p["max"], 0.0, 1.0)
-		var s: float = p["s"]
-		draw_rect(Rect2(p["p"] - Vector2(s, s) / 2.0, Vector2(s, s)), c)
-	for t in tracers:
-		draw_line(t["a"], t["b"], Color(1.0, 0.94, 0.7, t["life"] / 0.15), 2.0)
-	var pl = Game.world.player if Game.world else null
-	if pl:
-		for m in pl.marks + pl.exec_q:
-			if is_instance_valid(m) and not m.dead:
-				Gfx.cross(self, m.global_position, 7.0, Color("e0261a"), 3.0)
+		elif tr[0] is MeshInstance3D:
+			var k: float = tr[1] / 0.12
+			tr[0].scale = Vector3(k, k, 1.0)

@@ -1,39 +1,46 @@
-extends CharacterBody2D
-## Конь героя. Без всадника стоит на месте; по свисту скачет к хозяину.
+extends CharacterBody3D
+## Конь героя, Буран. Без всадника стоит на месте; по свисту скачет к хозяину.
 
-var ang := 0.0
+const HorseModelScript := preload("res://scripts/horse_model.gd")
+
+var yaw := 0.0
 var called := false
 var horse_name := "Буран"
-var t := 0.0
+var model: Node3D
 
 
 func _ready() -> void:
 	collision_layer = 8
 	collision_mask = 1
 	motion_mode = MOTION_MODE_FLOATING
-	var cs := CollisionShape2D.new()
-	var s := CircleShape2D.new()
-	s.radius = 16.0
+	var cs := CollisionShape3D.new()
+	var s := CylinderShape3D.new()
+	s.radius = 0.9
+	s.height = 2.0
 	cs.shape = s
+	cs.position.y = 1.0
 	add_child(cs)
+	model = HorseModelScript.new()
+	add_child(model)
 
 
 func _physics_process(delta: float) -> void:
-	t += delta
 	if not visible:
 		return
-	var p: Node2D = Game.world.player
-	var d := global_position.distance_to(p.global_position)
-	if called and d > 55.0:
-		var dir := (p.global_position - global_position).normalized()
-		ang = dir.angle()
-		velocity = dir * (320.0 if d > 200.0 else 120.0)
+	var p: Node3D = Game.world.player
+	var to := p.global_position - global_position
+	to.y = 0.0
+	var d := to.length()
+	var spd := 0.0
+	if called and d > 3.5:
+		var dir := to / d
+		spd = 13.0 if d > 20.0 else 4.0
+		yaw = lerp_angle(yaw, atan2(-dir.x, -dir.z), minf(1.0, delta * 6.0))
+		velocity = dir * spd
 		move_and_slide()
 	else:
 		called = false
-		velocity = Vector2.ZERO
-	queue_redraw()
-
-
-func _draw() -> void:
-	Gfx.horse(self, Vector2.ZERO, ang, Color("6b3e22"), true, t)
+		velocity = Vector3.ZERO
+	global_position.y = 0.0
+	model.rotation.y = yaw
+	model.animate(spd, delta)
