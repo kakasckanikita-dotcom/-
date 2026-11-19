@@ -29,6 +29,10 @@ func _ready() -> void:
 	model.rotation.y = PI # голова модели смотрит в +Z, «вперёд» в Godot — это −Z
 	ap = model.find_children("*", "AnimationPlayer", true, false)[0]
 	skel = model.find_children("*", "Skeleton3D", true, false)[0]
+	# клипы движения и стойки должны повторяться (из glTF они приходят без петли)
+	for a in ap.get_animation_list():
+		var once := a.contains("Death") or a.contains("Fallen") or a.contains("Jump") or a.contains("Arise") or a.contains("Run_Stop") or a.contains("Buck")
+		ap.get_animation(a).loop_mode = Animation.LOOP_NONE if once else Animation.LOOP_LINEAR
 	ap.play(_anim("1 Ilde"))
 	ap.seek(0.0, true)
 	# размер и положение — по костям в позе стойки (габариты меша у этой модели неточные)
@@ -57,7 +61,7 @@ func _ready() -> void:
 	seat = Node3D.new()
 	att.add_child(seat)
 	var spine := _bone_pos_i(bi)
-	var want := Vector3(spine.x, spine.y + 0.2, spine.z + 0.05)
+	var want := Vector3(spine.x, spine.y + 0.2, spine.z + 0.15)
 	var att_g := skel.global_transform * skel.get_bone_global_pose(bi)
 	seat.transform = att_g.affine_inverse() * Transform3D(Basis(), to_global(want))
 	seat_y = want.y

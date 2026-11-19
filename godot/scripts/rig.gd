@@ -7,6 +7,9 @@ extends Node3D
 ## Сверху — слой рук (прицел/выстрел/перезарядка), посадка в седло и езда.
 
 const ANIM_ROLES := ["Hips", "Spine", "Spine1", "Spine2", "Neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand", "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase", "RightUpLeg", "RightLeg", "RightFoot", "RightToeBase"]
+const TORSO := ["Hips", "Spine", "Spine1", "Spine2", "Neck", "Head"]
+## перезарядка — только руки, без поворота корпуса
+const ARMS := ["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const UPPER := ["Spine1", "Spine2", "Neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const WALK_SPEED := 1.4 # м/с, при которых клип шага идёт в своём темпе
 const RUN_SPEED := 4.2
@@ -73,7 +76,40 @@ static func lib() -> Dictionary:
 				qs.append(Vector3(h[0], h[1], h[2]))
 				frames.append(qs)
 			_lib[name] = {"len": maxf(float(a["len"]), 0.001), "frames": frames}
+		_calibrate(["idle", "walk", "run", "death1", "pickup", "door"], "idle")
 	return _lib
+
+
+## Убрать постоянный наклон корпуса, который появляется из-за разной позы
+## покоя у модели-источника: средний поворот корпуса в стойке считаем «прямо».
+static func _calibrate(clips: Array, ref: String) -> void:
+	if not _lib.has(ref):
+		return
+	var frames: Array = _lib[ref]["frames"]
+	var n := ANIM_ROLES.size()
+	var off := Vector3.ZERO
+	for fr in frames:
+		off += fr[n]
+	off /= frames.size()
+	for i in n:
+		var r: String = ANIM_ROLES[i]
+		if not (r in TORSO):
+			continue
+		var acc := Quaternion()
+		var k := 0
+		for fr in frames:
+			k += 1
+			acc = acc.slerp(fr[i], 1.0 / k)
+		var corr := acc.inverse()
+		for c in clips:
+			if not _lib.has(c):
+				continue
+			for fr in _lib[c]["frames"]:
+				fr[i] = corr * (fr[i] as Quaternion)
+	for c in clips:
+		if _lib.has(c):
+			for fr in _lib[c]["frames"]:
+				fr[n] = (fr[n] as Vector3) - Vector3(off.x, off.y, 0.0)
 
 
 func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) -> void:
@@ -90,9 +126,10 @@ func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) 
 		if role in ANIM_ROLES and not bones.has(role):
 			bones[role] = i
 	skel.reset_bone_poses()
+	var sx0 := Models.rel_xf(skel, inst)
+	var up_guess := _gp("Head") - _gp("Hips")
 	R = (_gp("RightUpLeg") - _gp("LeftUpLeg")).normalized()
-	var up := _gp("Head") - _gp("Hips")
-	U = (up - R * up.dot(R)).normalized()
+	U = (up_guess - R * up_guess.dot(R)).normalized()
 	F = U.cross(R)
 	_B = Basis(R, U, F)
 	_Bi = _B.inverse()
@@ -309,7 +346,12 @@ func _upper(pose: Array, delta: float) -> Array:
 	if _upper_clip != "reload":
 		return pose
 	var w := clampf(minf(_upper_t, len - _upper_t) / 0.2, 0.0, 1.0)
-	return _mix_upper(pose, _sample("reload", _upper_t, false), w)
+	var top := _sample("reload", _upper_t, false)
+	var res := pose.duplicate()
+	for i in ANIM_ROLES.size():
+		if ANIM_ROLES[i] in ARMS:
+			res[i] = _blend(pose[i], top[i], w)
+	return res
 
 
 func _aim_arm(glob: Dictionary) -> void:
@@ -328,7 +370,11 @@ func _aim_arm(glob: Dictionary) -> void:
 
 func _animate_mounted(speed: float, delta: float) -> void:
 	_idle_t += delta
-	var pose: Array = _sample("idle", _idle_t, true)
+	var pose: Array = _sample("idle", _idle_t, true).duplicate()
+	for i in ANIM_ROLES.size():
+		if ANIM_ROLES[i] in ["Hips", "Spine", "Spine1", "Spine2"]:
+			pose[i] = Quaternion()
+	pose[ANIM_ROLES.size()] = Vector3.ZERO
 	pose = _upper(pose, delta)
 	var glob := _apply(pose, true)
 	var L := -R
