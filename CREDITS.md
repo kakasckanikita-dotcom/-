@@ -29,6 +29,16 @@
 | стойка, ходьба, бег, смерть | [Bearded man - Low poly animated](https://sketchfab.com/3d-models/bearded-man-low-poly-animated-5718a53d18a142f686b1d9f02a637773) | [Agor_](https://sketchfab.com/Agor_) |
 | перезарядка, выхватывание, смерти | [Police_ru combat online](https://sketchfab.com/3d-models/police-ru-combat-online-861b349c1407481f95a179a68402eebc) | [eqisX](https://sketchfab.com/eqisX) |
 
+## Животные
+
+| Где в игре | Модель | Автор | Лицензия |
+|---|---|---|---|
+| вилорог | [Pronghorn Animated Cel Shading 3D Model](https://sketchfab.com/3d-models/pronghorn-animated-cel-shading-3d-model-f2f60199a0614a438cd8c0432c1b3b8d) | [WildMesh_3D](https://sketchfab.com/WildMesh_3D) | CC Attribution |
+| койот | [low_poly_coyote_canis_latrans](https://sketchfab.com/3d-models/low-poly-coyote-canis-latrans-dcdadebd1033432e9b01a2d0347e3de5) | [tech.service.allwe](https://sketchfab.com/tech.service.allwe) | CC Attribution |
+| заяц | [Hare (animated)](https://sketchfab.com/3d-models/hare-animated-948938cd237d49a9868662213fa05543) | [bluekiwi.dog](https://sketchfab.com/bluekiwi.dog) | CC Attribution |
+| корова | [Farm Cow Animated Dairy cattle](https://sketchfab.com/3d-models/farm-cow-animated-dairy-cattle-0e780cb5ab6d457198ded7d4e191a03e) | [rukh3d](https://sketchfab.com/rukh3d) | CC Attribution |
+| орёл | [White Eagle Animation Fast Fly](https://sketchfab.com/3d-models/white-eagle-animation-fast-fly-30203bf39e5145f19c79e83c550139d3) | [GremorySaiyan](https://sketchfab.com/GremorySaiyan) | CC Attribution |
+
 ## Звуки и музыка
 
 Все 22 звуковых эффекта и 2 музыкальные темы сгенерированы в ElevenLabs
