@@ -40,6 +40,7 @@ var horse_model: Node3D
 var name_label: Label3D
 var hp_bar: MeshInstance3D
 var _think := 0.0
+var _anim_acc := 0.0
 
 
 func setup(k: String, pos: Vector3) -> void:
@@ -116,6 +117,8 @@ func head_height() -> float:
 func _physics_process(delta: float) -> void:
 	if dead:
 		dead_t += delta
+		if dead_t < 5.0 and model:
+			model.animate(0.0, delta)
 		if town != null and dead_t > 90.0 and Game.wanted == 0 and Game.world.v2(Game.world.player.global_position).distance_to(town["pos"]) > 120.0:
 			revive()
 		return
@@ -202,7 +205,12 @@ func _physics_process(delta: float) -> void:
 	var real_speed := velocity.length()
 	model.rotation.y = lerp_angle(model.rotation.y, yaw, minf(1.0, delta * 10.0))
 	model.aiming = engage
-	model.animate(real_speed, delta)
+	# дальние персонажи обновляют анимацию реже — экономия на телефоне
+	_anim_acc += delta
+	var step := 0.0 if d < 45.0 else (0.06 if d < 110.0 else 0.2)
+	if _anim_acc >= step:
+		model.animate(real_speed, _anim_acc)
+		_anim_acc = 0.0
 	if horse_model:
 		horse_model.rotation.y = model.rotation.y
 		if not dead:
@@ -220,6 +228,7 @@ func _shoot_at(p, target: Vector3, d: float, dmg: float) -> void:
 		p.hurt(dmg)
 	else:
 		end = target + Vector3(randf_range(-1.5, 1.5), randf_range(-0.8, 1.2), randf_range(-1.5, 1.5)) + (target - from).normalized() * 6.0
+	model.shoot_anim()
 	Game.world.fx.tracer(from, end)
 	Game.world.fx.muzzle(from)
 	Game.play("shot", clampf(-6.0 - d / 4.0, -30.0, -6.0), randf_range(0.8, 1.0))

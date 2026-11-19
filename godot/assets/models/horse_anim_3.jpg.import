@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ds1jy417b1lld"
-path="res://.godot/imported/armored_horse_1.png-aa560d3862ac7ea44762f76a6047f471.ctex"
+uid="uid://b5c7eq84u7rqt"
+path="res://.godot/imported/horse_anim_3.jpg-c234eb43cb2d87f7ee34211cc68f6707.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "bf3f3a372d8c3f9dac459cfb4e178e3f"
+"md5": "3737c0ac0e2b5b2e1c157b31ee2660b7"
 }
 
 [deps]
 
-source_file="res://assets/horse/armored_horse_1.png"
-dest_files=["res://.godot/imported/armored_horse_1.png-aa560d3862ac7ea44762f76a6047f471.ctex"]
+source_file="res://assets/models/horse_anim_3.jpg"
+dest_files=["res://.godot/imported/horse_anim_3.jpg-c234eb43cb2d87f7ee34211cc68f6707.ctex"]
 
 [params]
 

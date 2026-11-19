@@ -33,6 +33,10 @@ var flash := 0.0
 var last_town = null
 var hint := ""
 var hoof_t := 0.0
+var mount_dir := 0 # 1 — садится на коня, −1 — слезает
+var mount_t := 0.0
+const MOUNT_TIME := 1.3
+const DISMOUNT_TIME := 0.9
 var rig: Node3D
 var pivot: Node3D
 var arm: SpringArm3D
@@ -110,8 +114,14 @@ func _physics_process(delta: float) -> void:
 
 	if dead:
 		dead_t += real
-		if dead_t > 3.5:
+		model.animate(0.0, real)
+		if dead_t > 4.0:
 			Game.world.respawn_player()
+		_update_camera(real)
+		return
+
+	if mount_dir != 0:
+		_update_mounting(real)
 		_update_camera(real)
 		return
 
@@ -234,6 +244,7 @@ func _update_focus(real: float) -> void:
 				Game.world.fx.muzzle(model.gun_pos())
 				Game.play("shot", -2.0, randf_range(0.9, 1.1))
 				shake = 4.0
+				model.shoot_anim()
 				t.take_hit(150.0, true)
 				Game.world.alert_town(global_position)
 			if exec_q.is_empty() and Game.clip == 0:
@@ -316,7 +327,7 @@ func target_under_crosshair():
 
 
 func shoot() -> void:
-	if reload_t > 0.0 or shoot_cd > 0.0:
+	if reload_t > 0.0 or shoot_cd > 0.0 or mount_dir != 0:
 		return
 	if Game.clip <= 0:
 		Game.play("click", -6.0)
@@ -354,6 +365,7 @@ func shoot() -> void:
 	Game.world.fx.tracer(gp, end)
 	Game.world.fx.muzzle(gp)
 	Game.play("shot", -2.0, randf_range(0.9, 1.1))
+	model.shoot_anim()
 	shake = 3.0
 	Game.world.alert_town(global_position)
 	if Game.clip == 0:
@@ -382,6 +394,7 @@ func start_reload() -> void:
 	if reload_t > 0.0 or Game.clip >= 6 or Game.ammo <= 0 or dead:
 		return
 	reload_t = 1.5
+	model.reload_anim()
 	Game.play("reload", -6.0)
 
 
@@ -398,7 +411,11 @@ func interact() -> void:
 		mount()
 
 
+## Посадка: подходит к левому боку, ставит ногу в стремя, перекидывает
+## правую ногу через круп и опускается в седло.
 func mount() -> void:
+	if mount_dir != 0:
+		return
 	mounted = true
 	horse.called = false
 	horse.visible = false
@@ -407,24 +424,67 @@ func mount() -> void:
 	global_position = horse.global_position
 	_col.shape = _shape_ride
 	_col.position.y = 1.5
-	model.mounted = true
-	model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
 	horse_model.visible = true
+	horse_model.rotation.y = horse_yaw
+	model.mounted = true
+	model.mount_k = 0.0
+	mount_dir = 1
+	mount_t = 0.0
+	move_vel = Vector3.ZERO
 	Game.play("horse", -6.0)
 
 
+func _side_pos() -> Vector3:
+	var right := Vector3(cos(horse_yaw), 0, -sin(horse_yaw))
+	return -right * 0.85
+
+
+func _update_mounting(real: float) -> void:
+	mount_t += real / (MOUNT_TIME if mount_dir > 0 else DISMOUNT_TIME)
+	var k := clampf(mount_t, 0.0, 1.0)
+	if mount_dir < 0:
+		k = 1.0 - k
+	model.mount_k = k
+	model.rotation.y = horse_yaw
+	face_yaw = horse_yaw
+	var seat: Vector3 = horse_model.rider_pos(horse_yaw, model.hip_y)
+	var side := _side_pos()
+	var up := smoothstep(0.15, 0.7, k)
+	var over := smoothstep(0.35, 0.95, k)
+	model.position = Vector3(lerpf(side.x, seat.x, over), lerpf(0.0, seat.y, up), lerpf(side.z, seat.z, over))
+	horse_model.rotation.y = horse_yaw
+	horse_model.animate(0.0, real)
+	model.animate(0.0, real)
+	if mount_t >= 1.0:
+		if mount_dir > 0:
+			model.mount_k = 1.0
+			mount_dir = 0
+		else:
+			mount_dir = 0
+			_finish_dismount()
+
+
 func dismount() -> void:
+	if mount_dir != 0 or not mounted:
+		return
+	mount_dir = -1
+	mount_t = 0.0
+	move_vel = Vector3.ZERO
+	cancel_focus()
+
+
+func _finish_dismount() -> void:
 	mounted = false
 	horse.global_position = global_position
 	horse.yaw = horse_yaw
 	horse.visible = true
 	horse_model.visible = false
 	model.mounted = false
+	model.mount_k = 1.0
 	model.position = Vector3.ZERO
 	_col.shape = _shape_walk
 	_col.position.y = 0.95
-	var side := Vector3(cos(horse_yaw), 0, -sin(horse_yaw)) * -1.6
-	move_and_collide(side)
+	move_and_collide(_side_pos())
 	move_vel = Vector3.ZERO
 	velocity = Vector3.ZERO
 
@@ -441,7 +501,8 @@ func hurt(dmg: float) -> void:
 	if Game.hp <= 0.0:
 		Game.hp = 0.0
 		if mounted:
-			dismount()
+			mount_dir = 0
+			_finish_dismount()
 		cancel_focus()
 		dead = true
 		dead_t = 0.0

@@ -8,7 +8,7 @@ const WOOD := Color("6b4423")
 const WOOD2 := Color("8a5a2f")
 const BOUNTY_NAMES := ["Эйб «Хромой» Таттл", "Сайлас Грач", "Вдова Мэг Холлоуэй", "Эзра Шрам", "Билли Две Луны", "Кальвин «Пастор» Ридж", "Хуан Ферро", "Одноглазый Норрис"]
 
-const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Armored Horse» — naminoff; ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs."
+const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs."
 const MinimapScript := preload("res://scripts/minimap.gd")
 const TouchScript := preload("res://scripts/touch.gd")
 

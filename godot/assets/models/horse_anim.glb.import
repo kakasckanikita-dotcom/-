@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://crro8xqbp0skw"
-path="res://.godot/imported/armored_horse.glb-c91e9ad83c3ce98983eb9032c19ada76.scn"
+uid="uid://bh7u4evijf2a7"
+path="res://.godot/imported/horse_anim.glb-57aaaa372bc724020fd3bbe7488c0dbf.scn"
 
 [deps]
 
-source_file="res://assets/horse/armored_horse.glb"
-dest_files=["res://.godot/imported/armored_horse.glb-c91e9ad83c3ce98983eb9032c19ada76.scn"]
+source_file="res://assets/models/horse_anim.glb"
+dest_files=["res://.godot/imported/horse_anim.glb-57aaaa372bc724020fd3bbe7488c0dbf.scn"]
 
 [params]
 

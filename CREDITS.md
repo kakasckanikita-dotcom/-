@@ -5,7 +5,7 @@
 
 | Где в игре | Модель | Автор |
 |---|---|---|
-| конь | [Armored Horse](https://sketchfab.com/3d-models/armored-horse-98c3f1c40a6b422dba76bf5403e0a3d8) | [naminoff](https://sketchfab.com/naminoff) |
+| конь (модель и 28 анимаций) | [Horse](https://sketchfab.com/3d-models/horse-a6f860e43e364619bccb174a1ac7d0c9) | [henry_7](https://sketchfab.com/henry_7) |
 | герой | [Western Cowboy (Rigged)](https://sketchfab.com/3d-models/western-cowboy-rigged-160bf043b71c458984c81c717b7483c9) | [stevedaman](https://sketchfab.com/stevedaman) |
 | бандиты, шерифы, горожане | [Lowpoly сowboy](https://sketchfab.com/3d-models/lowpoly-owboy-ceab7b1385064fdebee4e275e407cefa) | [Sololopenko](https://sketchfab.com/Sololopenko) |
 | револьвер | [Low Poly Colt Single-Action Army](https://sketchfab.com/3d-models/low-poly-colt-single-action-army-84c4960b259e4ac9afadccd187d388ed) | [TastyTony](https://sketchfab.com/TastyTony) |
@@ -19,3 +19,12 @@
 | фургон в лагерях | [Wooden Covered Wagon](https://sketchfab.com/3d-models/wooden-covered-wagon-d5dc49f3a1434b3392ce54b7d9cd3b74) | [BytesCrafter](https://sketchfab.com/BytesCrafter) |
 | камни | [Stylized Rocks Asset Pack](https://sketchfab.com/3d-models/stylized-rocks-asset-pack-480403c4689a425db3748baa88ad52c4) | [deadzik](https://sketchfab.com/deadzik) |
 | кактусы, горы, бочки, ящики, динамит | [Low Poly Western](https://sketchfab.com/3d-models/low-poly-western-a46585f820d54001bb5c21de9bc66db6) | [gallacs](https://sketchfab.com/gallacs) |
+
+## Анимации людей
+
+Движения перенесены на наших персонажей (сами модели-источники в игру не входят).
+
+| Что | Источник | Автор |
+|---|---|---|
+| стойка, ходьба, бег, смерть | [Bearded man - Low poly animated](https://sketchfab.com/3d-models/bearded-man-low-poly-animated-5718a53d18a142f686b1d9f02a637773) | [Agor_](https://sketchfab.com/Agor_) |
+| перезарядка, выхватывание, смерти | [Police_ru combat online](https://sketchfab.com/3d-models/police-ru-combat-online-861b349c1407481f95a179a68402eebc) | [eqisX](https://sketchfab.com/eqisX) |
