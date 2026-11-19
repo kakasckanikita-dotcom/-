@@ -11,6 +11,7 @@ const TORSO := ["Hips", "Spine", "Spine1", "Spine2", "Neck", "Head"]
 ## перезарядка — только руки, без поворота корпуса
 const ARMS := ["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]
 const UPPER := ["Spine1", "Spine2", "Neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]
+const RUN := "run_b" # бег «бизнесмена» — прямее и естественнее
 const WALK_SPEED := 1.4 # м/с, при которых клип шага идёт в своём темпе
 const RUN_SPEED := 4.2
 
@@ -77,6 +78,7 @@ static func lib() -> Dictionary:
 				frames.append(qs)
 			_lib[name] = {"len": maxf(float(a["len"]), 0.001), "frames": frames}
 		_calibrate(["idle", "walk", "run", "death1", "pickup", "door"], "idle")
+		_calibrate(["idle_b", "walk_b", "run_b"], "idle_b")
 	return _lib
 
 
@@ -319,7 +321,7 @@ func animate(speed: float, delta: float) -> void:
 	_w_move = move_toward(_w_move, clampf((speed - 0.15) / 1.0, 0.0, 1.0), delta * 5.0)
 	_w_run = move_toward(_w_run, clampf((speed - 2.4) / 1.8, 0.0, 1.0), delta * 4.0)
 	var wl: float = _lib["walk"]["len"]
-	var rl: float = _lib["run"]["len"]
+	var rl: float = _lib[RUN]["len"]
 	var cyc := lerpf(wl, rl, _w_run)
 	var rate := lerpf(maxf(speed, 0.6) / WALK_SPEED, maxf(speed, 1.0) / RUN_SPEED, _w_run)
 	_phase = fposmod(_phase + delta * clampf(rate, 0.4, 2.2) / cyc, 1.0)
@@ -327,7 +329,7 @@ func animate(speed: float, delta: float) -> void:
 	var pose: Array = _sample("idle", _idle_t, true)
 	if _w_move > 0.0:
 		var walk := _sample("walk", _phase * wl, true)
-		var run := _sample("run", _phase * rl, true)
+		var run := _sample(RUN, _phase * rl, true)
 		pose = _mix(pose, _mix(walk, run, _w_run), _w_move)
 	pose = _upper(pose, delta)
 	_aim_arm(_apply(pose))
