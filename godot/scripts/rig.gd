@@ -134,13 +134,18 @@ func animate(speed: float, delta: float) -> void:
 	var L := -R
 	if mounted:
 		# бёдра обхватывают бока коня, голени висят вниз вдоль боков
-		var tl := _aim("LeftUpLeg", "LeftLeg", F * 0.35 - U * 0.55 + L * 0.7)
+		var tl := _aim("LeftUpLeg", "LeftLeg", F * 0.4 - U * 0.65 + L * 0.42)
 		_aim("LeftLeg", "LeftFoot", -U - F * 0.15 + L * 0.12, tl)
-		var tr := _aim("RightUpLeg", "RightLeg", F * 0.35 - U * 0.55 + R * 0.7)
+		var tr := _aim("RightUpLeg", "RightLeg", F * 0.4 - U * 0.65 + R * 0.42)
 		_aim("RightLeg", "RightFoot", -U - F * 0.15 + R * 0.12, tr)
-		var al := _aim("LeftArm", "LeftForeArm", -U * 0.6 + F * 0.5 + L * 0.2)
-		_aim("LeftForeArm", "LeftHand", F * 0.9 - U * 0.2, al)
-		_arm_right(0.0)
+		# обе руки держат поводья перед седлом; правая поднимается при прицеливании
+		var al := _aim("LeftArm", "LeftForeArm", -U * 0.8 + F * 0.35 + L * 0.12)
+		_aim("LeftForeArm", "LeftHand", F * 0.9 - U * 0.25 + R * 0.3, al)
+		if aiming:
+			_arm_right(0.0)
+		else:
+			var ar := _aim("RightArm", "RightForeArm", -U * 0.8 + F * 0.35 + R * 0.12)
+			_aim("RightForeArm", "RightHand", F * 0.9 - U * 0.25 + L * 0.3, ar)
 		return
 	var k := clampf(speed / 4.0, 0.0, 1.5)
 	phase += delta * (3.0 + speed * 1.6)

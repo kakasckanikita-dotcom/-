@@ -22,8 +22,9 @@ func _ready() -> void:
 	a = _aabb()
 	model.position = Vector3(-a.get_center().x, -a.position.y, -a.get_center().z)
 	_base = model.position
-	seat_y = a.size.y * 0.66
-	seat_z = a.size.z * 0.14
+	# по габаритам седла модели: сиденье ~77 % высоты, центр седла чуть позади середины
+	seat_y = a.size.y * 0.77
+	seat_z = a.size.z * 0.1
 
 
 func _aabb() -> AABB:
