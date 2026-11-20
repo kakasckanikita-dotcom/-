@@ -258,6 +258,7 @@ func _update_focus(real: float) -> void:
 				shake = 4.0
 				model.shoot_anim()
 				t.take_hit(150.0, true)
+				Game.world.hud.hit(true)
 				Game.world.alert_town(global_position)
 			if exec_q.is_empty() and Game.clip == 0:
 				start_reload()
@@ -372,11 +373,13 @@ func shoot() -> void:
 				if not c.dead and c.hp <= dmg:
 					Game.say("Точно в голову!", Game.GOLD)
 			c.take_hit(dmg, true)
+			Game.world.hud.hit(c.dead)
 		elif Game.world.in_water(end):
 			Game.world.fx.splash(Vector3(end.x, -0.45, end.z), true)
 			Game.play_at("splash", end, -6.0, randf_range(1.1, 1.4), 8.0)
 		elif c is CollisionObject3D and c.collision_layer & 16:
 			Game.world.fx.dust(end)
+			Game.world.fx.bullet_hole(end, hit["normal"])
 			if randf() < 0.2:
 				Game.world.fx.sparks(end)
 			Game.play_at("impact", end, -4.0, randf_range(0.9, 1.15), 8.0)

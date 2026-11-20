@@ -40,6 +40,29 @@
 | корова | [Farm Cow Animated Dairy cattle](https://sketchfab.com/3d-models/farm-cow-animated-dairy-cattle-0e780cb5ab6d457198ded7d4e191a03e) | [rukh3d](https://sketchfab.com/rukh3d) | CC Attribution |
 | орёл | [White Eagle Animation Fast Fly](https://sketchfab.com/3d-models/white-eagle-animation-fast-fly-30203bf39e5145f19c79e83c550139d3) | [GremorySaiyan](https://sketchfab.com/GremorySaiyan) | CC Attribution |
 
+## Реквизит
+
+| Где в игре | Модель | Автор | Лицензия |
+|---|---|---|---|
+| бочки | [Wooden Barrels](https://sketchfab.com/3d-models/b6e4ad5bcfcb4e58a0511040e888ddd3) | MaX3Dd | CC Attribution |
+| телега | [Old wooden Wagon](https://sketchfab.com/3d-models/8e92e18ae53d484ab334eede6421f0d5) | Peter.Nox | CC Attribution |
+| сухие деревья | [Low Poly: Dead Tree](https://sketchfab.com/3d-models/addc2aef9e534a93a8798320fea440ef) | clintonabbott.art | CC Attribution |
+| сухие деревья | [Dead Tree](https://sketchfab.com/3d-models/33ccce6111604656a4b5709483670ec3) | MaX3Dd | CC Attribution |
+| забор загона | [Fence and Gate (Wood)](https://sketchfab.com/3d-models/20e6b190adaa47aa883c93b490bda791) | trentspice | CC Attribution |
+| виселица | [Old gallows](https://sketchfab.com/3d-models/e9d235ecfc974e44b1caa97b0980e157) | adam127 | CC Attribution |
+| коновязь | [Hitching Post](https://sketchfab.com/3d-models/28f90c0f78cf40f9b143060cbf33fe42) | Ellen_Ennest | CC Attribution |
+| фонари | [LP_Oil_Lantern](https://sketchfab.com/3d-models/fcf1353213994bf8ba3ae9c2d966b5b3) | Vitor.Gomes1 | CC Attribution |
+| коровий череп | [Low Poly Cow Skull](https://sketchfab.com/3d-models/0a7e982c5e88468f8bafe2f11c8b9972) | Tohst | CC Attribution |
+| корыто | [Water Trough - Low Poly Medieval](https://sketchfab.com/3d-models/2ba720b8921543b69edad075b9d7c5c5) | Avramania | CC0 |
+| ветряк с водокачкой | [Old West Windmill & Water Tower](https://sketchfab.com/3d-models/d1713e0e1d2642a88e1d243650e4869d) | DanielGrps | CC Attribution |
+| горожанин-бородач | [Bearded man - Low poly animated](https://sketchfab.com/3d-models/bearded-man-low-poly-animated-5718a53d18a142f686b1d9f02a637773) | Agor_ | CC Attribution |
+
+## Шрифты
+
+[Old Standard TT](https://fonts.google.com/specimen/Old+Standard+TT) и
+[PT Sans Narrow](https://fonts.google.com/specimen/PT+Sans+Narrow) — SIL Open Font
+License 1.1 (текст лицензии — `godot/assets/fonts/OFL.txt`).
+
 ## Звуки и музыка
 
 Все 28 звуковых эффектов, 4 музыкальные темы и 34 голосовые реплики

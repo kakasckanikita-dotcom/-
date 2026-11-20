@@ -22,7 +22,50 @@ func tracer(a: Vector3, b: Vector3) -> void:
 	tracers.append([m, 0.12])
 
 
+var _flash_mat: StandardMaterial3D
+var _decal_mat: StandardMaterial3D
+var _blood_mat: StandardMaterial3D
+var decals: Array = [] # [узел, возраст]
+
+
+## Звёздочка вспышки: яркий спрайт, всегда лицом к камере.
+func _flash_material() -> StandardMaterial3D:
+	if _flash_mat:
+		return _flash_mat
+	var S := 64
+	var img := Image.create(S, S, false, Image.FORMAT_RGBA8)
+	for y in S:
+		for x in S:
+			var d := Vector2(x - S / 2.0 + 0.5, y - S / 2.0 + 0.5) / (S / 2.0)
+			var r := d.length()
+			var a := atan2(d.y, d.x)
+			var rays := pow(absf(cos(a * 3.0)), 6.0) * 0.6 + 0.4
+			var v := clampf(1.0 - r / rays, 0.0, 1.0)
+			v = v * v
+			img.set_pixel(x, y, Color(1.0, 0.85 * v + 0.15, 0.5 * v, v))
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.albedo_color = Color(1.6, 1.3, 0.9)
+	m.no_depth_test = false
+	_flash_mat = m
+	return m
+
+
 func muzzle(p: Vector3) -> void:
+	var q := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2.ONE * randf_range(0.5, 0.75)
+	q.mesh = qm
+	q.material_override = _flash_material()
+	q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	q.rotation.z = randf() * TAU
+	add_child(q)
+	q.global_position = p
+	tracers.append([q, 0.05])
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.8, 0.4)
 	l.light_energy = 3.0
@@ -183,6 +226,87 @@ func trail() -> CPUParticles3D:
 	return cp
 
 
+## След пули: тёмное пятнышко на поверхности (стена, камень, земля).
+func bullet_hole(p: Vector3, n: Vector3) -> void:
+	if _decal_mat == null:
+		_decal_mat = StandardMaterial3D.new()
+		var g := Gradient.new()
+		g.set_color(0, Color(0.05, 0.03, 0.02, 1.0))
+		g.add_point(0.45, Color(0.12, 0.08, 0.05, 0.9))
+		g.set_color(g.get_point_count() - 1, Color(0.2, 0.15, 0.1, 0.0))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 32
+		t.height = 32
+		_decal_mat.albedo_texture = t
+		_decal_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_decal_mat.roughness = 1.0
+	_ground_quad(p + n * 0.02, n, randf_range(0.09, 0.14), _decal_mat, 40.0)
+
+
+## Лужа крови растекается под телом.
+func blood_pool(p: Vector3) -> void:
+	if _blood_mat == null:
+		_blood_mat = StandardMaterial3D.new()
+		var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		var nz := FastNoiseLite.new()
+		nz.frequency = 0.08
+		for y in 64:
+			for x in 64:
+				var d := Vector2(x - 31.5, y - 31.5).length() / 32.0
+				var edge := 0.75 + nz.get_noise_2d(x, y) * 0.35
+				var a := clampf((edge - d) * 6.0, 0.0, 1.0)
+				img.set_pixel(x, y, Color(0.28, 0.02, 0.01, a * 0.85))
+		_blood_mat.albedo_texture = ImageTexture.create_from_image(img)
+		_blood_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blood_mat.roughness = 0.25
+		_blood_mat.metallic_specular = 0.6
+	var q := _ground_quad(p + Vector3(0, 0.03, 0), Vector3.UP, 0.2, _blood_mat, 90.0)
+	q.rotation.y = randf() * TAU
+	var tw := q.create_tween()
+	tw.tween_property(q, "scale", Vector3.ONE * randf_range(6.0, 9.0), 4.0).set_ease(Tween.EASE_OUT)
+
+
+func _ground_quad(p: Vector3, n: Vector3, sz: float, mat: Material, life: float) -> MeshInstance3D:
+	var q := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2.ONE * sz
+	q.mesh = pm
+	q.material_override = mat
+	q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(q)
+	var up := n.normalized()
+	var side := up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
+	q.global_transform = Transform3D(Basis(side, up, side.cross(up)).orthonormalized(), p)
+	decals.append([q, life])
+	if decals.size() > 60:
+		var old: Array = decals.pop_front()
+		if is_instance_valid(old[0]):
+			old[0].queue_free()
+	return q
+
+
+## Пыльный вихрь: облако песка проносится по ветру.
+func dust_gust(p: Vector3, wind: Vector3) -> void:
+	var cp := _puffs(Color(0.8, 0.68, 0.5, 0.32), 40, 4.0, 3.0, 2.5)
+	cp.one_shot = true
+	cp.explosiveness = 0.3
+	cp.direction = wind.normalized() + Vector3(0, 0.15, 0)
+	cp.spread = 25.0
+	cp.initial_velocity_min = 4.0
+	cp.initial_velocity_max = 8.0
+	cp.gravity = Vector3(0, 0.3, 0)
+	cp.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	cp.emission_box_extents = Vector3(6, 0.5, 6)
+	add_child(cp)
+	cp.global_position = p
+	cp.emitting = true
+	get_tree().create_timer(6.0, false).timeout.connect(cp.queue_free)
+
+
 func blood(p: Vector3) -> void:
 	burst(p, Color("8a1a10"), 14)
 
@@ -193,6 +317,13 @@ func dust(p: Vector3) -> void:
 
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.01)
+	for i in range(decals.size() - 1, -1, -1):
+		var d: Array = decals[i]
+		d[1] -= delta
+		if d[1] <= 0.0 or not is_instance_valid(d[0]):
+			if is_instance_valid(d[0]):
+				d[0].queue_free()
+			decals.remove_at(i)
 	for i in range(tracers.size() - 1, -1, -1):
 		var tr: Array = tracers[i]
 		tr[1] -= real

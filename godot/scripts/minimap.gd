@@ -15,7 +15,7 @@ func _draw() -> void:
 	var mid := Vector2(S, S) / 2.0
 	# мировой (x, z) → экран миникарты; поворот, чтобы взгляд камеры был вверх
 	var M := func(p: Vector2) -> Vector2: return (p - center).rotated(rot) * sc + mid
-	draw_rect(Rect2(Vector2.ZERO, size), Color("c9a46b"))
+	draw_texture_rect(UiKit.paper(), Rect2(Vector2.ZERO, size), false, Color(0.95, 0.85, 0.68))
 	for r in w.roads:
 		var pts := PackedVector2Array()
 		for p in r:
@@ -53,4 +53,17 @@ func _draw() -> void:
 	var fy: float = w.player.face_yaw - rot
 	var dir := Vector2(-sin(fy), -cos(fy))
 	draw_colored_polygon(PackedVector2Array([mid + dir * 8.0, mid + dir.rotated(2.5) * 6.0, mid + dir.rotated(-2.5) * 6.0]), Color.WHITE)
-	draw_rect(Rect2(Vector2.ZERO, size), Color("3a2412"), false, 3.0)
+	# деревянная рамка и север
+	var fw := 6.0
+	draw_texture_rect(UiKit.wood(), Rect2(0, 0, S, fw), false)
+	draw_texture_rect(UiKit.wood(), Rect2(0, S - fw, S, fw), false)
+	draw_texture_rect(UiKit.wood(), Rect2(0, 0, fw, S), false)
+	draw_texture_rect(UiKit.wood(), Rect2(S - fw, 0, fw, S), false)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.12, 0.07, 0.03), false, 1.5)
+	var nd := Vector2(0, -1).rotated(rot)
+	var t := maxf(absf(nd.x), absf(nd.y))
+	var np := mid + nd / t * (S / 2.0 - 13.0)
+	draw_circle(np, 9.0, Color(0.12, 0.07, 0.03, 0.85))
+	var f := UiKit.font_title()
+	var ws := f.get_string_size("С", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	draw_string(f, np + Vector2(-ws / 2.0, 5.0), "С", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("f0c75a"))

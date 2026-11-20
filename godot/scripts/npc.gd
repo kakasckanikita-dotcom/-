@@ -42,6 +42,7 @@ var hp_bar: MeshInstance3D
 var _think := 0.0
 var _anim_acc := 0.0
 var voice := "" # набор голосовых реплик
+var body := "npc" # модель тела
 var _was_engaged := false
 var _was_fleeing := false
 var _chat_t := 0.0
@@ -60,6 +61,9 @@ func setup(k: String, pos: Vector3) -> void:
 	wt = pos
 	yaw = randf() * TAU
 	cd = randf_range(0.5, 1.5)
+	# горожане разные: часть — бородачи в рубахах
+	if k == "folk" and randf() < 0.5:
+		body = "bearded"
 	match k:
 		"bandit": voice = "banda" if randf() < 0.5 else "bandb"
 		"leader": voice = "banda"
@@ -104,7 +108,7 @@ func rebuild() -> void:
 		name_label = null
 	model = RigScript.new()
 	add_child(model)
-	model.build("npc", height, tint, kind != "folk")
+	model.build(body, height, tint if body == "npc" else Color.WHITE, kind != "folk")
 	if mounted:
 		model.mounted = true
 		model.position = horse_model.rider_pos(yaw, model.hip_y, model.sit_h)
@@ -350,7 +354,10 @@ func _die(by_player: bool) -> void:
 	var fall_at := global_position
 	get_tree().create_timer(0.7 if not mounted else 1.0).timeout.connect(func():
 		Game.play_at("bodyfall", fall_at, -3.0, randf_range(0.9, 1.1), 8.0)
-		Game.world.fx.dust(fall_at + Vector3(0, 0.2, 0)))
+		Game.world.fx.dust(fall_at + Vector3(0, 0.2, 0))
+		var gp := fall_at + (Vector3(1.4, 0, 0) if mounted else Vector3.ZERO)
+		gp.y = Game.world.ground(gp.x, gp.z)
+		Game.world.fx.blood_pool(gp))
 	if name_label:
 		name_label.visible = false
 	if by_player:

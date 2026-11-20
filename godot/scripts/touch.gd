@@ -14,7 +14,7 @@ var font: Font
 
 
 func _ready() -> void:
-	font = ThemeDB.fallback_font
+	font = UiKit.font_body()
 
 
 func _layout() -> void:
@@ -114,11 +114,14 @@ func _draw() -> void:
 	# кнопки
 	for b in _visible_buttons():
 		var pressed: bool = held.values().has(b["action"])
-		var col := Color(0.42, 0.27, 0.14, 0.75) if not pressed else Color(0.7, 0.45, 0.2, 0.9)
+		var col := Color(0.16, 0.1, 0.05, 0.62) if not pressed else Color(0.55, 0.36, 0.15, 0.85)
 		if b["action"] == "focus" and Game.world.player.focus_on:
-			col = Color(0.85, 0.55, 0.1, 0.9)
+			col = Color(0.8, 0.52, 0.12, 0.85)
+		draw_circle(b["c"], b["r"] + 2.0, Color(0, 0, 0, 0.3))
 		draw_circle(b["c"], b["r"], col)
-		draw_arc(b["c"], b["r"], 0, TAU, 32, Color(1, 0.9, 0.7, 0.6), 2.0)
+		draw_arc(b["c"], b["r"] - 1.5, 0, TAU, 40, Color(0.92, 0.72, 0.36, 0.75), 2.5)
+		draw_arc(b["c"], b["r"] - 6.0, 0, TAU, 40, Color(0.92, 0.72, 0.36, 0.2), 1.0)
 		var fs := int((15.0 if b["r"] > 40.0 * u else 11.0) * u)
 		var w := font.get_string_size(b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		draw_string(font, b["c"] + Vector2(-w / 2.0, fs * 0.35), b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Game.CREAM)
+		draw_string_outline(font, b["c"] + Vector2(-w / 2.0, fs * 0.35), b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.6))
+		draw_string(font, b["c"] + Vector2(-w / 2.0, fs * 0.35), b["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f3e3c0"))

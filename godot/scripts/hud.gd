@@ -8,7 +8,7 @@ const WOOD := Color("6b4423")
 const WOOD2 := Color("8a5a2f")
 const BOUNTY_NAMES := ["Эйб «Хромой» Таттл", "Сайлас Грач", "Вдова Мэг Холлоуэй", "Эзра Шрам", "Билли Две Луны", "Кальвин «Пастор» Ридж", "Хуан Ферро", "Одноглазый Норрис"]
 
-const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Business Man» (manoeldarochadeoliveira), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog. Звуки, музыка и голоса — ElevenLabs."
+const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Business Man» (manoeldarochadeoliveira), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; горожанин «Bearded man» — Agor_; реквизит: «Wooden Barrels», «Dead Tree» — MaX3Dd; «Old wooden Wagon» — Peter.Nox; «Fence and Gate (Wood)» — trentspice; «Hitching Post» — Ellen_Ennest; «Water Trough» (CC0) — Avramania; «Old West Windmill & Water Tower» — DanielGrps; «Low Poly: Dead Tree» — clintonabbott.art; «Low Poly Cow Skull» — Tohst; «LP_Oil_Lantern» — Vitor.Gomes1; «Old gallows» — adam127; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog. Звуки, музыка и голоса — ElevenLabs. Шрифты Old Standard TT и PT Sans Narrow — SIL OFL."
 const MinimapScript := preload("res://scripts/minimap.gd")
 const TouchScript := preload("res://scripts/touch.gd")
 
@@ -21,10 +21,14 @@ var menu_box: VBoxContainer
 var minimap: Control
 var touch: Control
 var font: Font
+var tfont: Font # заголовки
+var hit_t := 0.0 # отметка попадания у прицела
+var hit_kill := false
 
 
 func _ready() -> void:
-	font = ThemeDB.fallback_font
+	font = UiKit.font_body()
+	tfont = UiKit.font_title()
 	Game.toast.connect(_on_toast)
 	_build_theme()
 	minimap = MinimapScript.new()
@@ -50,19 +54,26 @@ func _on_toast(text: String, color: Color) -> void:
 		toasts.pop_front()
 
 
+## Попадание по цели: белая отметка, при убийстве — красная.
+func hit(kill: bool) -> void:
+	hit_kill = kill
+	hit_t = 0.35 if kill else 0.25
+
+
 func ui_open() -> bool:
 	return title_root.visible or menu_root.visible or big_map
 
 
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.01)
+	hit_t = maxf(0.0, hit_t - real)
 	for t in toasts:
 		t["life"] -= real
 	while not toasts.is_empty() and toasts[0]["life"] <= 0.0:
 		toasts.pop_front()
 	var s := 130.0 if size.y < 600.0 else 170.0
 	minimap.size = Vector2(s, s)
-	minimap.position = Vector2(size.x - s - 14, 70)
+	minimap.position = Vector2(size.x - s - 14, 82)
 	minimap.visible = not ui_open() and Game.world != null
 	minimap.queue_redraw()
 	if not Game.touch_mode:
@@ -108,29 +119,32 @@ func _sb(c: Color, margin := 12.0) -> StyleBoxFlat:
 
 func _build_theme() -> void:
 	ui_theme = Theme.new()
-	ui_theme.default_font_size = 20 if Game.touch_mode else 16
-	ui_theme.set_stylebox("normal", "Button", _sb(WOOD))
-	ui_theme.set_stylebox("pressed", "Button", _sb(WOOD2.darkened(0.2)))
-	ui_theme.set_stylebox("hover", "Button", _sb(WOOD2))
-	ui_theme.set_stylebox("disabled", "Button", _sb(Color(WOOD, 0.45)))
+	ui_theme.default_font = font
+	ui_theme.default_font_size = 22 if Game.touch_mode else 18
+	ui_theme.set_stylebox("normal", "Button", UiKit.wood_box(false))
+	ui_theme.set_stylebox("hover", "Button", UiKit.wood_box(true))
+	ui_theme.set_stylebox("pressed", "Button", UiKit.wood_box(true))
+	var dis := UiKit.wood_box(false)
+	dis.modulate_color = Color(1, 1, 1, 0.45)
+	ui_theme.set_stylebox("disabled", "Button", dis)
 	ui_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		ui_theme.set_color(c, "Button", Game.CREAM)
-	ui_theme.set_color("font_disabled_color", "Button", Color(Game.CREAM, 0.6))
+		ui_theme.set_color(c, "Button", Color("f3e3c0"))
+	ui_theme.set_color("font_hover_color", "Button", Color("ffe9a8"))
+	ui_theme.set_color("font_disabled_color", "Button", Color("f3e3c0", 0.55))
+	ui_theme.set_color("font_outline_color", "Button", Color(0.1, 0.05, 0.02, 0.8))
+	ui_theme.set_constant("outline_size", "Button", 3)
 	ui_theme.set_color("font_color", "Label", INK)
-	var panel := StyleBoxFlat.new()
-	panel.bg_color = PAPER
-	panel.border_color = WOOD
-	panel.set_border_width_all(4)
-	panel.set_content_margin_all(22)
-	panel.shadow_color = Color(0, 0, 0, 0.6)
-	panel.shadow_size = 20
-	ui_theme.set_stylebox("panel", "PanelContainer", panel)
+	ui_theme.set_stylebox("panel", "PanelContainer", UiKit.paper_box(30.0))
+	var sep := StyleBoxLine.new()
+	sep.color = Color(INK, 0.4)
+	sep.thickness = 2
+	ui_theme.set_stylebox("separator", "HSeparator", sep)
 
 
 func _screen() -> Array:
 	var root := ColorRect.new()
-	root.color = Color(0.04, 0.02, 0.01, 0.62)
+	root.color = Color(0.05, 0.03, 0.01, 0.55)
 	root.theme = ui_theme
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(root)
@@ -143,8 +157,15 @@ func _screen() -> Array:
 	cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.add_child(cc)
+	var vig := TextureRect.new()
+	vig.texture = UiKit.vignette()
+	vig.stretch_mode = TextureRect.STRETCH_SCALE
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(vig)
+	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.move_child(vig, 0)
 	var pc := PanelContainer.new()
-	pc.custom_minimum_size = Vector2(minf(620.0, get_viewport_rect().size.x - 32.0), 0)
+	pc.custom_minimum_size = Vector2(minf(640.0, get_viewport_rect().size.x - 32.0), 0)
 	cc.add_child(pc)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
@@ -152,9 +173,11 @@ func _screen() -> Array:
 	return [root, vb]
 
 
-func _label(parent: Control, text: String, font_size := 16, align := HORIZONTAL_ALIGNMENT_LEFT, alpha := 1.0) -> Label:
+func _label(parent: Control, text: String, font_size := 16, align := HORIZONTAL_ALIGNMENT_LEFT, alpha := 1.0, title := false) -> Label:
 	var l := Label.new()
 	l.text = text
+	if title:
+		l.add_theme_font_override("font", tfont)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.horizontal_alignment = align
 	l.add_theme_font_size_override("font_size", font_size + (4 if Game.touch_mode else 0))
@@ -179,8 +202,10 @@ func _build_title() -> void:
 	var m := _screen()
 	title_root = m[0]
 	var vb: VBoxContainer = m[1]
-	_label(vb, "ПЫЛЬ И СВИНЕЦ", 40, HORIZONTAL_ALIGNMENT_CENTER)
-	_label(vb, "Территория Мескаль, 1889 год", 16, HORIZONTAL_ALIGNMENT_CENTER, 0.75)
+	var t := _label(vb, "ПЫЛЬ И СВИНЕЦ", 50, HORIZONTAL_ALIGNMENT_CENTER, 1.0, true)
+	t.add_theme_color_override("font_color", Color("5a1a0e"))
+	_label(vb, "— Территория Мескаль, 1889 год —", 18, HORIZONTAL_ALIGNMENT_CENTER, 0.8, true)
+	vb.add_child(HSeparator.new())
 	_label(vb, "Вы — Эли Брэнсон, охотник за головами. Банды держат пустыню в страхе, а шериф платит за каждого главаря. Возьмите розыск, найдите лагерь, вернитесь за наградой. Или станьте тем, на кого охотятся сами.", 15)
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -201,7 +226,8 @@ func _build_title() -> void:
 		_button(vb, "Новая игра (сбросить сохранение)", func(): Game.delete_save(); _start(false), false, true)
 	else:
 		_button(vb, "В седло", func(): _start(false), false, true)
-	_label(vb, CREDITS, 10, HORIZONTAL_ALIGNMENT_CENTER, 0.6)
+	vb.add_child(HSeparator.new())
+	_label(vb, CREDITS, 11, HORIZONTAL_ALIGNMENT_CENTER, 0.6)
 
 
 func _start(load_save: bool) -> void:
@@ -218,9 +244,11 @@ func open_menu(title: String, sub: String, opts: Array) -> void:
 	for c in menu_box.get_children():
 		menu_box.remove_child(c)
 		c.queue_free()
-	_label(menu_box, title, 26)
-	_label(menu_box, sub, 15, HORIZONTAL_ALIGNMENT_LEFT, 0.75)
-	_label(menu_box, "В кармане: $%d   Патроны: %d   Аптечки: %d   Тоники: %d" % [Game.money, Game.ammo, Game.medkits, Game.tonics], 14)
+	var tl := _label(menu_box, title, 32, HORIZONTAL_ALIGNMENT_CENTER, 1.0, true)
+	tl.add_theme_color_override("font_color", Color("5a1a0e"))
+	_label(menu_box, sub, 17, HORIZONTAL_ALIGNMENT_CENTER, 0.8)
+	menu_box.add_child(HSeparator.new())
+	_label(menu_box, "В кармане: $%d   ·   Патроны: %d   ·   Аптечки: %d   ·   Тоники: %d" % [Game.money, Game.ammo, Game.medkits, Game.tonics], 15, HORIZONTAL_ALIGNMENT_CENTER)
 	for o in opts:
 		var cb: Callable = o[2]
 		_button(menu_box, o[0], func(): cb.call(); Game.save_game(), o[1])
@@ -346,35 +374,73 @@ func open_building(b: Dictionary) -> void:
 
 
 # ---------- отрисовка HUD ----------
-func _text(pos: Vector2, s: String, sz: int, col: Color, align := 0) -> void:
-	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x
+func _text(pos: Vector2, s: String, sz: int, col: Color, align := 0, f: Font = null, shadow := true) -> void:
+	var ff := f if f else font
+	var w := ff.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x
 	var x := pos.x
 	if align == 0:
 		x -= w / 2.0
 	elif align == 1:
 		x -= w
-	draw_string(font, Vector2(x, pos.y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, col)
+	if shadow:
+		draw_string_outline(ff, Vector2(x, pos.y + 1), s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, maxi(2, sz / 6), Color(0.06, 0.03, 0.01, col.a * 0.75))
+	draw_string(ff, Vector2(x, pos.y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, col)
 
 
-func _tw(s: String, sz: int) -> float:
-	return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x
+func _tw(s: String, sz: int, f: Font = null) -> float:
+	return (f if f else font).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x
+
+
+## Тёмная лента с прозрачными краями (уведомления, подсказки).
+func _ribbon(c: Vector2, w: float, h: float, a := 1.0, col := Color(0.07, 0.04, 0.02)) -> void:
+	var e := minf(60.0, w * 0.25)
+	var x0 := c.x - w / 2.0 - e
+	var x1 := c.x + w / 2.0 + e
+	var y0 := c.y - h / 2.0
+	var y1 := c.y + h / 2.0
+	var solid := Color(col, 0.72 * a)
+	var clear := Color(col, 0.0)
+	draw_polygon(PackedVector2Array([Vector2(x0, y0), Vector2(x0 + e, y0), Vector2(x0 + e, y1), Vector2(x0, y1)]), PackedColorArray([clear, solid, solid, clear]))
+	draw_rect(Rect2(x0 + e, y0, w, h), solid)
+	draw_polygon(PackedVector2Array([Vector2(x1 - e, y0), Vector2(x1, y0), Vector2(x1, y1), Vector2(x1 - e, y1)]), PackedColorArray([solid, clear, clear, solid]))
+	draw_line(Vector2(x0 + e * 0.5, y0), Vector2(x1 - e * 0.5, y0), Color(0.85, 0.66, 0.3, 0.45 * a), 1.0)
+	draw_line(Vector2(x0 + e * 0.5, y1), Vector2(x1 - e * 0.5, y1), Color(0.85, 0.66, 0.3, 0.45 * a), 1.0)
 
 
 func _box(r: Rect2) -> void:
-	draw_rect(r, Color(0.08, 0.05, 0.02, 0.72))
+	draw_rect(r, Color(0.08, 0.05, 0.02, 0.6))
 
 
-func _bar(p: Vector2, w: float, v: float, col: Color, label: String) -> void:
-	draw_rect(Rect2(p - Vector2(2, 2), Vector2(w + 4, 18)), Color(0.08, 0.05, 0.02, 0.75))
-	draw_rect(Rect2(p, Vector2(w * clampf(v, 0.0, 1.0), 14)), col)
-	_text(p + Vector2(4, 11), label, 11, Game.CREAM, -1)
+## Круглый показатель с кольцом и значком в центре.
+func _core(c: Vector2, r: float, v: float, col: Color, icon: Callable, low := false) -> void:
+	draw_circle(c, r + 3.0, Color(0.05, 0.03, 0.01, 0.55))
+	draw_arc(c, r - 2.0, 0, TAU, 40, Color(0.2, 0.14, 0.08, 0.85), 5.0)
+	var vv := clampf(v, 0.0, 1.0)
+	if vv > 0.001:
+		draw_arc(c, r - 2.0, -PI / 2.0, -PI / 2.0 + TAU * vv, maxi(6, int(40 * vv)), col, 5.0)
+	var ic := col.lightened(0.15)
+	if low:
+		ic = ic.lerp(Color.WHITE, 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012))
+	icon.call(c, r * 0.48, ic)
+
+
+## Барабан револьвера: латунные гильзы в гнёздах.
+func _cylinder(c: Vector2, r: float) -> void:
+	draw_circle(c, r + 3.0, Color(0.05, 0.03, 0.01, 0.6))
+	draw_circle(c, r, Color(0.22, 0.2, 0.19, 0.95))
+	draw_arc(c, r, 0, TAU, 32, Color(0.5, 0.47, 0.42), 2.0)
+	for i in 6:
+		var p := c + Vector2.from_angle(i / 6.0 * TAU - PI / 2) * r * 0.58
+		draw_circle(p, r * 0.24, Color(0.08, 0.07, 0.06))
+		if i < Game.clip:
+			draw_circle(p, r * 0.2, Color("d6a84a"))
+			draw_circle(p, r * 0.08, Color("8a6424"))
+	draw_circle(c, r * 0.14, Color(0.4, 0.38, 0.35))
 
 
 func _star(c: Vector2, r: float, col: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 10:
-		pts.append(c + Vector2.from_angle(-PI / 2 + i * PI / 5) * (r if i % 2 == 0 else r * 0.45))
-	draw_colored_polygon(pts, col)
+	UiKit.star(self, c, r + 1.5, Color(0.05, 0.03, 0.01, col.a * 0.8))
+	UiKit.star(self, c, r, col)
 
 
 func _draw() -> void:
@@ -384,10 +450,16 @@ func _draw() -> void:
 		return
 	var pl = w.player
 	var tm := Game.touch_mode
+	# кинематографичная виньетка; в «Глазе ястреба» — сепия
+	draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(1, 1, 1, 0.55))
 	if pl.focus_on or not pl.exec_q.is_empty():
-		draw_rect(Rect2(Vector2.ZERO, W), Color(0.55, 0.27, 0.04, 0.25))
+		draw_rect(Rect2(Vector2.ZERO, W), Color(0.55, 0.3, 0.06, 0.22))
+		draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(0.6, 0.25, 0.05, 0.9))
 	if pl.flash > 0.0:
-		draw_rect(Rect2(Vector2.ZERO, W), Color(0.63, 0, 0, pl.flash * 0.6))
+		draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(0.75, 0.0, 0.0, minf(1.0, pl.flash * 1.6)))
+	if Game.hp < 30.0 and not pl.dead:
+		var pulse := 0.35 + 0.25 * sin(Time.get_ticks_msec() * 0.006)
+		draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(0.6, 0.0, 0.0, pulse))
 
 	# метки «Глаза ястреба»
 	for m in pl.marks + pl.exec_q:
@@ -395,84 +467,109 @@ func _draw() -> void:
 			var wp: Vector3 = m.global_position + Vector3(0, m.head_height() - 0.3, 0)
 			if not pl.cam.is_position_behind(wp):
 				var sp: Vector2 = pl.cam.unproject_position(wp)
+				draw_line(sp + Vector2(-10, -10), sp + Vector2(10, 10), Color(0.1, 0.0, 0.0, 0.7), 7.0)
+				draw_line(sp + Vector2(10, -10), sp + Vector2(-10, 10), Color(0.1, 0.0, 0.0, 0.7), 7.0)
 				draw_line(sp + Vector2(-9, -9), sp + Vector2(9, 9), Color("e0261a"), 4.0)
 				draw_line(sp + Vector2(9, -9), sp + Vector2(-9, 9), Color("e0261a"), 4.0)
 
-	# прицел
+	# прицел: точка, при наведении на цель — красный и раскрывается
 	if not pl.dead and not big_map:
 		var c := W / 2.0
 		var on_target = pl.target_under_crosshair() != null
-		var cc := Color("ff4a3a") if on_target else Color(1, 1, 1, 0.85)
-		draw_arc(c, 9.0, 0, TAU, 20, cc, 2.0)
-		draw_circle(c, 1.8, cc)
+		var cc := Color("ff4a3a") if on_target else Color(1, 1, 1, 0.9)
+		draw_circle(c, 3.2, Color(0, 0, 0, 0.5))
+		draw_circle(c, 2.2, cc)
+		if on_target or pl.aim_t > 0.0:
+			var g := 7.0 if on_target else 10.0
+			for k in 4:
+				var d := Vector2.from_angle(k * PI / 2.0)
+				draw_line(c + d * g, c + d * (g + 6.0), Color(0, 0, 0, 0.5), 3.5)
+				draw_line(c + d * g, c + d * (g + 6.0), cc, 1.8)
+		if hit_t > 0.0:
+			var hc := Color(1, 0.2, 0.15, hit_t / 0.35) if hit_kill else Color(1, 1, 1, hit_t / 0.25)
+			for k in 4:
+				var d := Vector2.from_angle(PI / 4.0 + k * PI / 2.0)
+				draw_line(c + d * 6.0, c + d * 14.0, hc, 2.5)
 
-	# слева сверху: деньги, время, честь
-	_box(Rect2(12, 12, 230, 82))
-	_text(Vector2(22, 40), "$%d" % Game.money, 22, Color("e8c35a"), -1)
+	# слева сверху: деньги, время, честь — текст с тенью, без плашек
+	_text(Vector2(20, 44), "$%d" % Game.money, 34, Color("f0c75a"), -1, tfont)
 	var hh := int(Game.game_time / 60.0)
 	var mm := int(fmod(Game.game_time, 60.0))
-	_text(Vector2(22, 62), "День %d   %02d:%02d" % [Game.day, hh, mm], 15, Game.CREAM, -1)
-	_text(Vector2(22, 84), "Честь: %d   Убито: %d" % [Game.honor, Game.kills], 15, Game.GOOD if Game.honor >= 0 else Game.BAD, -1)
+	_text(Vector2(22, 68), "День %d  ·  %02d:%02d" % [Game.day, hh, mm], 18, Game.CREAM, -1)
+	var hcol: Color = Game.GOOD if Game.honor >= 0 else Game.BAD
+	_star(Vector2(30, 85), 7.0, hcol)
+	_text(Vector2(42, 92), "Честь %+d    Убито %d" % [Game.honor, Game.kills], 17, Game.CREAM, -1)
 
 	# розыск
 	if Game.wanted > 0:
 		for i in 5:
-			_star(Vector2(W.x - 24 - (4 - i) * 26, 30), 11, Color("ff5a3a") if i < Game.wanted else Color(0.3, 0.2, 0.15, 0.7))
+			_star(Vector2(W.x - 26 - (4 - i) * 30, 34), 12, Color("ff5a3a") if i < Game.wanted else Color(0.35, 0.25, 0.18, 0.7))
 		var txt := "Скрываетесь… %d" % ceili(25.0 - Game.evade) if Game.evade > 0.5 else "РАЗЫСКИВАЕТСЯ"
-		_text(Vector2(W.x - 14, 60), txt, 13, Game.CREAM, 1)
+		_text(Vector2(W.x - 16, 64), txt, 16, Color("ffb39a"), 1, tfont)
 
 	# задание
 	if Game.bounty != null:
-		var txt := "Награда ждёт у шерифа: $%d" % Game.bounty["reward"] if Game.bounty["done"] else "Цель: %s — «%s»" % [Game.bounty["name"], Game.bounty["camp"].camp_name]
-		_box(Rect2(12, 100, _tw(txt, 14) + 20, 26))
-		_text(Vector2(22, 118), txt, 14, Game.GOLD, -1)
+		var txt := "Награда ждёт у шерифа: $%d" % Game.bounty["reward"] if Game.bounty["done"] else "%s — «%s»" % [Game.bounty["name"], Game.bounty["camp"].camp_name]
+		UiKit.star(self, Vector2(28, 113), 6.0, Game.GOLD)
+		_text(Vector2(40, 119), txt, 17, Game.GOLD, -1)
 
-	# уведомления
+	# уведомления — ленты по центру сверху
 	for i in toasts.size():
 		var t: Dictionary = toasts[i]
 		var a := minf(1.0, t["life"])
-		var tw := _tw(t["t"], 17) + 24.0
-		draw_rect(Rect2(W.x / 2 - tw / 2, 70 + i * 32, tw, 26), Color(0.08, 0.05, 0.02, 0.75 * a))
-		_text(Vector2(W.x / 2, 89 + i * 32), t["t"], 17, Color(t["c"], a))
+		var tw := _tw(t["t"], 19) + 20.0
+		var cy := 84.0 + i * 34.0
+		_ribbon(Vector2(W.x / 2.0, cy), tw, 28.0, a)
+		_text(Vector2(W.x / 2.0, cy + 7.0), t["t"], 19, Color(t["c"], a))
 
-	# полоски и барабан: на ПК внизу слева, на телефоне — под деньгами
-	var by := 136.0 if tm else W.y - 90.0
-	if Game.bounty == null and tm:
-		by = 106.0
-	_bar(Vector2(16, by), 180, Game.hp / 100.0, Color("a8261a"), "Здоровье")
-	_bar(Vector2(16, by + 22), 180, Game.focus / 100.0, Color("c8901a"), "Глаз ястреба")
+	# круглые показатели и барабан: на ПК внизу слева, на телефоне — под деньгами
+	var cr := 26.0
+	var cy2 := (172.0 if Game.bounty != null else 150.0) if tm else W.y - 52.0
+	var cx := 20.0 + cr
+	_core(Vector2(cx, cy2), cr, Game.hp / 100.0, Color("c8321e"), func(c, r, col): UiKit.heart(self, c, r, col), Game.hp < 30.0)
+	cx += cr * 2.0 + 12.0
+	_core(Vector2(cx, cy2), cr, Game.focus / 100.0, Color("d9a22a"), func(c, r, col): UiKit.eye(self, c, r, col))
 	if pl.mounted:
-		_bar(Vector2(16, by + 44), 180, Game.stam / 100.0, Color("4a7a9a"), "Галоп")
-	var ax := 206.0
-	_box(Rect2(ax, by - 2, 160, 60))
-	for i in 6:
-		var c := Vector2(ax + 30, by + 26) + Vector2.from_angle(i / 6.0 * TAU - PI / 2) * 14.0
-		draw_circle(c, 4.5, Color("e8c35a") if i < Game.clip else Color("3a2a1a"))
-	_text(Vector2(ax + 56, by + 24), "Перезарядка" if pl.reload_t > 0.0 else "%d / %d" % [Game.clip, Game.ammo], 16, Game.CREAM, -1)
-	_text(Vector2(ax + 56, by + 44), "Аптечки %d  Тоники %d" % [Game.medkits, Game.tonics], 12, Game.CREAM, -1)
+		cx += cr * 2.0 + 12.0
+		_core(Vector2(cx, cy2), cr, Game.stam / 100.0, Color("5a93b8"), func(c, r, col): UiKit.horseshoe(self, c, r, col))
+	cx += cr * 2.0 + 16.0
+	_cylinder(Vector2(cx, cy2), cr - 2.0)
+	var tx := cx + cr + 8.0
+	_text(Vector2(tx, cy2 - 2.0), "Перезарядка…" if pl.reload_t > 0.0 else "%d" % Game.clip, 26 if pl.reload_t <= 0.0 else 18, Game.CREAM, -1, tfont)
+	if pl.reload_t <= 0.0:
+		_text(Vector2(tx + _tw("%d" % Game.clip, 26, tfont) + 4.0, cy2 - 2.0), "/ %d" % Game.ammo, 17, Color(Game.CREAM, 0.75), -1)
+	UiKit.cross(self, Vector2(tx + 6.0, cy2 + 15.0), 5.0, Color("d04030"))
+	_text(Vector2(tx + 15.0, cy2 + 21.0), "%d" % Game.medkits, 15, Game.CREAM, -1)
+	UiKit.bottle(self, Vector2(tx + 40.0, cy2 + 15.0), 5.5, Color("6fb0c8"))
+	_text(Vector2(tx + 49.0, cy2 + 21.0), "%d" % Game.tonics, 15, Game.CREAM, -1)
 	if Game.clip == 0 and Game.ammo == 0:
-		_text(Vector2(ax, by - 8), "Нет патронов — в лавку!", 12, Game.BAD, -1)
+		_text(Vector2(20, cy2 - cr - 10.0), "Нет патронов — в лавку!", 15, Game.BAD, -1)
 
-	# подсказка действия
+	# подсказка действия: клавиша в кружке
 	if pl.hint != "" and not pl.dead:
-		var key := "ДЕЙСТВИЕ" if tm else "E"
-		var s := "[%s] %s" % [key, pl.hint]
-		var hw := _tw(s, 16) + 24.0
-		var hy := W.y * 0.62
-		_box(Rect2(W.x / 2 - hw / 2, hy - 20, hw, 28))
-		_text(Vector2(W.x / 2, hy), s, 16, Game.CREAM)
+		var key := "!" if tm else "E"
+		var hw := _tw(pl.hint, 18) + 44.0
+		var hy := W.y * 0.64
+		_ribbon(Vector2(W.x / 2.0, hy), hw, 32.0)
+		var kc := Vector2(W.x / 2.0 - hw / 2.0 + 14.0, hy)
+		draw_circle(kc, 12.0, Color("e8d2a2"))
+		draw_arc(kc, 12.0, 0, TAU, 20, Color(0.2, 0.12, 0.05), 1.5)
+		_text(kc + Vector2(0, 6), key, 16, INK, 0, font, false)
+		_text(Vector2(kc.x + 22.0, hy + 7.0), pl.hint, 18, Game.CREAM, -1)
 
 	if pl.focus_on:
 		var how := "касайтесь целей" if tm else "наведите и щёлкните по целям"
-		_text(Vector2(W.x / 2, W.y * 0.25), "ГЛАЗ ЯСТРЕБА — %s (%d/%d)" % [how, pl.marks.size(), Game.clip], 18, Game.GOLD)
+		_text(Vector2(W.x / 2, W.y * 0.24), "ГЛАЗ ЯСТРЕБА", 30, Game.GOLD, 0, tfont)
+		_text(Vector2(W.x / 2, W.y * 0.24 + 26), "%s · %d / %d" % [how, pl.marks.size(), Game.clip], 18, Game.CREAM)
 
 	if big_map:
 		_draw_big_map()
 
 	if pl.dead:
-		draw_rect(Rect2(Vector2.ZERO, W), Color(0, 0, 0, minf(0.75, pl.dead_t * 0.3)))
-		_text(W / 2, "ВЫ ПОГИБЛИ", 54, Color("cc3333"))
-		_text(W / 2 + Vector2(0, 34), "Пустыня не прощает ошибок", 18, Game.CREAM)
+		draw_rect(Rect2(Vector2.ZERO, W), Color(0.08, 0.0, 0.0, minf(0.7, pl.dead_t * 0.3)))
+		draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(0, 0, 0, minf(1.0, pl.dead_t * 0.5)))
+		_text(W / 2, "ВЫ ПОГИБЛИ", 64, Color("c83a2a"), 0, tfont)
+		_text(W / 2 + Vector2(0, 40), "Пустыня не прощает ошибок", 22, Game.CREAM)
 
 
 func _draw_big_map() -> void:
@@ -481,8 +578,8 @@ func _draw_big_map() -> void:
 	var o := (size - Vector2(S, S)) / 2.0
 	var sc: float = S / w.WORLD
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.65))
-	draw_rect(Rect2(o - Vector2(8, 8), Vector2(S + 16, S + 16)), PAPER)
-	draw_rect(Rect2(o, Vector2(S, S)), Color("d2b27c"))
+	draw_texture_rect(UiKit.wood(), Rect2(o - Vector2(14, 14), Vector2(S + 28, S + 28)), false)
+	draw_texture_rect(UiKit.paper(), Rect2(o, Vector2(S, S)), false, Color(0.95, 0.88, 0.75))
 	for r in w.roads:
 		var pts := PackedVector2Array()
 		for p in r:
@@ -497,13 +594,13 @@ func _draw_big_map() -> void:
 	for t in w.towns:
 		var c: Vector2 = o + t["pos"] * sc
 		draw_rect(Rect2(c - Vector2(7, 7), Vector2(14, 14)), INK)
-		_text(c - Vector2(0, 13), t["name"], 15, INK)
+		_text(c - Vector2(0, 13), t["name"], 18, INK, 0, tfont, false)
 	for c in w.camps:
 		if not c.known:
 			continue
 		var p: Vector2 = o + w.v2(c.position) * sc
 		draw_circle(p, 5.0, Color("666666") if c.cleared else Color("a01a10"))
-		_text(p + Vector2(0, 18), c.camp_name, 12, INK)
+		_text(p + Vector2(0, 18), c.camp_name, 14, INK, 0, font, false)
 	if Game.bounty != null and not Game.bounty["done"]:
 		var bp: Vector2 = o + w.v2(Game.bounty["camp"].position) * sc
 		draw_line(bp + Vector2(-8, -8), bp + Vector2(8, 8), Color("d4a017"), 3.0)
@@ -512,4 +609,4 @@ func _draw_big_map() -> void:
 	draw_circle(pp, 6.0, Color.BLACK)
 	draw_circle(pp, 4.5, Color.WHITE)
 	var close_hint := "коснитесь, чтобы закрыть" if Game.touch_mode else "[M] закрыть"
-	_text(Vector2(size.x / 2, maxf(o.y - 16, 20)), "ТЕРРИТОРИЯ МЕСКАЛЬ  ·  " + close_hint, 18, Game.CREAM)
+	_text(Vector2(size.x / 2, maxf(o.y - 22, 24)), "ТЕРРИТОРИЯ МЕСКАЛЬ  ·  " + close_hint, 22, Game.CREAM, 0, tfont)

@@ -1088,8 +1088,19 @@ func _make_tumbleweed() -> Node3D:
 	return root
 
 
+var _gust_t := 20.0
+
+
 func _update_tumbleweeds(delta: float) -> void:
 	var pp := player.global_position
+	# пыльные вихри в пустыне днём
+	_gust_t -= delta
+	if _gust_t <= 0.0:
+		_gust_t = randf_range(25.0, 60.0)
+		if town_at(pp) == null and Game.darkness() < 0.5:
+			var gp := pp - WIND * randf_range(25.0, 40.0) + WIND.cross(Vector3.UP) * randf_range(-15.0, 15.0)
+			gp.y = ground(gp.x, gp.z) + 0.5
+			fx.dust_gust(gp, WIND)
 	var want := 0 if town_at(pp) != null or Game.darkness() > 0.7 else 3
 	# новые появляются с наветренной стороны
 	if _tumbles.size() < want and randf() < delta * 0.25:
