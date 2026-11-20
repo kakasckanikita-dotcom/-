@@ -249,6 +249,7 @@ func _update_focus(real: float) -> void:
 				aim_t = 1.0
 				Game.world.fx.tracer(model.gun_pos(), tp)
 				Game.world.fx.muzzle(model.gun_pos())
+				Game.world.fx.smoke(model.gun_pos(), tp - model.gun_pos())
 				Game.play("shot", -2.0, randf_range(0.9, 1.1))
 				shake = 4.0
 				model.shoot_anim()
@@ -292,6 +293,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("whistle") and not mounted:
 		horse.called = true
 		Game.play("whistle", -4.0)
+		get_tree().create_timer(0.9).timeout.connect(func(): Game.vo("hero", 1, null, "hero_call", 12.0, -2.0))
 		Game.say("Вы свистнули. %s скачет к вам." % horse.horse_name)
 	elif event.is_action_pressed("medkit") and Game.medkits > 0 and Game.hp < 100.0:
 		Game.medkits -= 1
@@ -366,12 +368,22 @@ func shoot() -> void:
 				if not c.dead and c.hp <= dmg:
 					Game.say("Точно в голову!", Game.GOLD)
 			c.take_hit(dmg, true)
+		elif Game.world.in_water(end):
+			Game.world.fx.splash(Vector3(end.x, -0.45, end.z), true)
+			Game.play_at("splash", end, -6.0, randf_range(1.1, 1.4), 8.0)
+		elif c is CollisionObject3D and c.collision_layer & 16:
+			Game.world.fx.dust(end)
+			if randf() < 0.2:
+				Game.world.fx.sparks(end)
+			Game.play_at("impact", end, -4.0, randf_range(0.9, 1.15), 8.0)
 		else:
+			Game.world.fx.sparks(end)
 			Game.world.fx.dust(end)
 			Game.play_at("ricochet" if randf() < 0.35 else "impact", end, -4.0, randf_range(0.9, 1.15), 8.0)
 	var gp: Vector3 = model.gun_pos()
 	Game.world.fx.tracer(gp, end)
 	Game.world.fx.muzzle(gp)
+	Game.world.fx.smoke(gp, end - gp)
 	Game.play("shot", -2.0, randf_range(0.9, 1.1))
 	model.shoot_anim()
 	shake = 3.0
@@ -442,6 +454,8 @@ func mount() -> void:
 	mount_t = 0.0
 	move_vel = Vector3.ZERO
 	Game.play("horse", -6.0)
+	if randf() < 0.35:
+		Game.vo("hero", 2, null, "hero", 30.0, -3.0)
 
 
 func _side_pos() -> Vector3:

@@ -27,6 +27,7 @@
 | Что | Источник | Автор |
 |---|---|---|
 | стойка, ходьба, бег, смерть | [Bearded man - Low poly animated](https://sketchfab.com/3d-models/bearded-man-low-poly-animated-5718a53d18a142f686b1d9f02a637773) | [Agor_](https://sketchfab.com/Agor_) |
+| бег | [Business Man - Low Polygon game character](https://sketchfab.com/3d-models/b6f6740f883b4749abac47af0045a9dd) | [manoeldarochadeoliveira](https://sketchfab.com/manoeldarochadeoliveira) |
 | перезарядка, выхватывание, смерти | [Police_ru combat online](https://sketchfab.com/3d-models/police-ru-combat-online-861b349c1407481f95a179a68402eebc) | [eqisX](https://sketchfab.com/eqisX) |
 
 ## Животные
@@ -41,6 +42,6 @@
 
 ## Звуки и музыка
 
-Все 22 звуковых эффекта и 2 музыкальные темы сгенерированы в ElevenLabs
-(Sound Effects v3, Music v2.5) для этой игры; обработка — обрезка, громкость,
-бесшовные петли.
+Все 28 звуковых эффектов, 4 музыкальные темы и 34 голосовые реплики
+сгенерированы в ElevenLabs (Sound Effects v3, Music v2.5, Eleven v4) для этой
+игры; обработка — обрезка, громкость, бесшовные петли.

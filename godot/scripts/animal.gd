@@ -26,6 +26,7 @@ var yaw := 0.0
 var leader: Node3D = null # стадо держится вожака
 var _think := 0.0
 var _bite := 0.0
+var _call_t := randf_range(8.0, 40.0)
 
 
 func setup(kind: String, pos: Vector3) -> void:
@@ -77,6 +78,14 @@ func _physics_process(delta: float) -> void:
 		if _think > 0.0:
 			return
 		_think = 1.0
+	# голоса: коровы мычат, койоты ночью воют и тявкают перед нападением
+	_call_t -= delta
+	if _call_t <= 0.0:
+		_call_t = randf_range(18.0, 45.0)
+		if species == "cow" and d < 70.0:
+			Game.play_at("moo", global_position + Vector3(0, 1.4, 0), -4.0, randf_range(0.85, 1.1), 12.0)
+		elif species == "coyote" and Game.darkness() > 0.5 and d < 140.0 and (leader == null or randf() < 0.3):
+			Game.play_at("coyote_howl", global_position + Vector3(0, 1, 0), -2.0, randf_range(0.9, 1.1), 30.0)
 	var spd := 0.0
 	var mv := Vector3.ZERO
 	var night := Game.darkness() > 0.6

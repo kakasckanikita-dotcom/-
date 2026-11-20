@@ -626,6 +626,10 @@ func alert_town(p: Vector3) -> void:
 	for n in get_tree().get_nodes_in_group("npcs"):
 		if not n.dead and n.kind == "folk" and n.global_position.distance_to(p) < 50.0:
 			n.flee = 6.0
+	# из окна кричит горожанка
+	if town_at(p) != null:
+		var w := p + Vector3(randf_range(-14, 14), 2.5, randf_range(-14, 14))
+		Game.vo("townf", 3 if randf() < 0.4 else 4, w, "townf", 7.0)
 
 
 # ---------- животные ----------
@@ -774,6 +778,7 @@ func _process(delta: float) -> void:
 	_update_law(delta)
 	_update_sky()
 	_update_audio(delta)
+	_update_tumbleweeds(delta)
 	player.lantern.light_energy = Game.darkness() * 1.1
 
 
@@ -826,6 +831,12 @@ func _setup_audio() -> void:
 				a.play()
 
 
+var _chatter_t := 15.0
+var _wade_t := 0.0
+var _music_town := 0.0
+var _music_night := 0.0
+
+
 func _update_audio(delta: float) -> void:
 	var p := player
 	var dk := Game.darkness()
@@ -836,7 +847,19 @@ func _update_audio(delta: float) -> void:
 	var spd := Vector2(p.move_vel.x, p.move_vel.z).length()
 	var riding: bool = p.mounted and p.mount_dir == 0 and not p.dead
 	var walking: bool = not p.mounted and not p.dead and spd > 0.5
-	Game.loop_set("steps", clampf(spd / 4.6, 0.0, 1.0) * 0.55 if walking else 0.0, clampf(0.8 + spd * 0.06, 0.8, 1.2))
+	# по доскам (крыльцо, мост, тротуар — герой выше земли) — деревянные шаги
+	var on_wood: bool = walking and (pp.y - ground(pp.x, pp.z) > 0.12 or (on_bridge(pp.z) and absf(pp.x - river_x(pp.z)) < RIVER_W / 2.0 + 5.0))
+	var wet: bool = in_water(pp)
+	var sv := clampf(spd / 4.6, 0.0, 1.0) * 0.55 if walking else 0.0
+	var sp := clampf(0.8 + spd * 0.06, 0.8, 1.2)
+	Game.loop_set("steps", 0.0 if on_wood else sv * (0.5 if wet else 1.0), sp)
+	Game.loop_set("steps_wood", sv * 1.1 if on_wood else 0.0, sp)
+	if wet and walking:
+		_wade_t -= delta
+		if _wade_t <= 0.0:
+			_wade_t = clampf(1.4 / spd, 0.25, 0.7)
+			fx.splash(Vector3(pp.x, -0.45, pp.z))
+			Game.play_at("splash", pp, -12.0, randf_range(0.9, 1.3), 5.0)
 	var gallop := clampf((spd - 5.0) / 3.0, 0.0, 1.0) if riding else 0.0
 	var walk := clampf(spd / 2.0, 0.0, 1.0) * (1.0 - gallop) if riding else 0.0
 	Game.loop_set("hoof_walk", walk * 0.6, clampf(spd / 1.8, 0.7, 1.6))
@@ -844,6 +867,13 @@ func _update_audio(delta: float) -> void:
 	# окружение: ветер днём, сверчки ночью
 	Game.loop_set("wind", lerpf(0.32, 0.15, dk) * (1.3 if town_at(pp) == null else 0.7))
 	Game.loop_set("crickets", dk * 0.45)
+	# в городе днём слышны голоса с крылец и из окон
+	_chatter_t -= delta
+	if _chatter_t <= 0.0:
+		_chatter_t = randf_range(25.0, 50.0)
+		if dk < 0.5 and Game.wanted == 0 and not p.dead and town_at(pp) != null:
+			var w := pp + Vector3(randf_range(-12, 12), 2.0, randf_range(-12, 12))
+			Game.vo("townf", 1 if randf() < 0.5 else 2, w, "townf", 20.0, -3.0)
 	# музыка: спокойная в поездках, напряжённая в перестрелке
 	var fight := false
 	for n in get_tree().get_nodes_in_group("npcs"):
@@ -851,6 +881,66 @@ func _update_audio(delta: float) -> void:
 			fight = true
 			break
 	_music_combat = move_toward(_music_combat, 0.5 if fight else 0.0, delta * (0.8 if fight else 0.15))
-	_music_explore = move_toward(_music_explore, 0.0 if fight else 0.28, delta * 0.12)
+	# мирная музыка зависит от места и времени: город днём, ночь, дорога
+	var in_town: bool = town_at(pp) != null
+	var night := dk > 0.6
+	var calm := not fight and not p.dead
+	_music_explore = move_toward(_music_explore, 0.28 if calm and not in_town and not night else 0.0, delta * 0.12)
+	_music_town = move_toward(_music_town, 0.24 if calm and in_town and not night else 0.0, delta * 0.12)
+	_music_night = move_toward(_music_night, 0.3 if calm and night else 0.0, delta * 0.1)
 	Game.loop_set("music_combat", _music_combat)
 	Game.loop_set("music_explore", _music_explore)
+	Game.loop_set("music_town", _music_town)
+	Game.loop_set("music_night", _music_night)
+
+
+# ---------- перекати-поле ----------
+const WIND := Vector3(0.94, 0, 0.34) # ветер дует с запада
+var _tumbles: Array = [] # [узел, скорость, фаза прыжка]
+var _tumble_mesh: Array = []
+
+
+func _make_tumbleweed() -> Node3D:
+	var root := Node3D.new()
+	var m := Mk.mat(Color("8a7048"), 1.0)
+	for i in 4:
+		var t := TorusMesh.new()
+		t.inner_radius = randf_range(0.26, 0.34)
+		t.outer_radius = t.inner_radius + 0.035
+		t.rings = 10
+		t.ring_segments = 3
+		t.material = m
+		var mi := MeshInstance3D.new()
+		mi.mesh = t
+		mi.rotation = Vector3(randf() * PI, randf() * PI, randf() * PI)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		root.add_child(mi)
+	root.scale = Vector3.ONE * randf_range(0.8, 1.3)
+	return root
+
+
+func _update_tumbleweeds(delta: float) -> void:
+	var pp := player.global_position
+	var want := 0 if town_at(pp) != null or Game.darkness() > 0.7 else 3
+	# новые появляются с наветренной стороны
+	if _tumbles.size() < want and randf() < delta * 0.25:
+		var side := WIND.rotated(Vector3.UP, randf_range(-0.9, 0.9))
+		var sp := pp - side * randf_range(45.0, 70.0)
+		if not in_water(sp):
+			var t := _make_tumbleweed()
+			add_child(t)
+			t.global_position = Vector3(sp.x, ground(sp.x, sp.z) + 0.35, sp.z)
+			_tumbles.append([t, randf_range(2.5, 5.0), randf() * TAU])
+	for i in range(_tumbles.size() - 1, -1, -1):
+		var e: Array = _tumbles[i]
+		var t: Node3D = e[0]
+		var v: float = e[1] * (0.75 + 0.35 * sin(Time.get_ticks_msec() * 0.0007 + e[2]))
+		var pos := t.global_position + WIND * v * delta
+		e[2] += delta * v * 0.9
+		var hop := absf(sin(e[2])) * 0.45
+		pos.y = ground(pos.x, pos.z) + 0.35 * t.scale.x + hop
+		t.global_position = pos
+		t.rotate(WIND.cross(Vector3.UP).normalized(), -v * delta / 0.35)
+		if pos.distance_to(pp) > 95.0 or in_water(pos):
+			t.queue_free()
+			_tumbles.remove_at(i)

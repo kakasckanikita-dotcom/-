@@ -8,7 +8,7 @@ const WOOD := Color("6b4423")
 const WOOD2 := Color("8a5a2f")
 const BOUNTY_NAMES := ["Эйб «Хромой» Таттл", "Сайлас Грач", "Вдова Мэг Холлоуэй", "Эзра Шрам", "Билли Две Луны", "Кальвин «Пастор» Ридж", "Хуан Ферро", "Одноглазый Норрис"]
 
-const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog."
+const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Business Man» (manoeldarochadeoliveira), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog. Звуки, музыка и голоса — ElevenLabs."
 const MinimapScript := preload("res://scripts/minimap.gd")
 const TouchScript := preload("res://scripts/touch.gd")
 
@@ -237,9 +237,21 @@ func close_menu() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+var _door_t := -999.0
+
+
 func open_building(b: Dictionary) -> void:
 	var t: Dictionary = b["town"]
 	var reopen := func(): open_building(b)
+	# скрип двери и приветствие хозяина (раз в полминуты, а не при каждом обновлении меню)
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _door_t > 30.0:
+		Game.play("door", -6.0)
+	_door_t = now
+	# хозяин здоровается (раз в полминуты, а не при каждом обновлении меню)
+	var greet := {"saloon": ["shop", 1], "store": ["shop", 2], "bank": ["shop", 3], "hotel": ["shop", 4], "sheriff": ["sheriff", 2 if Game.wanted == 0 else 4]}
+	if greet.has(b["type"]):
+		Game.vo(greet[b["type"]][0], greet[b["type"]][1], null, "menu_" + b["type"], 30.0, -2.0)
 	match b["type"]:
 		"saloon":
 			open_menu("Салун «Последний Глоток»", t["name"] + ". Пахнет табаком и дешёвым виски.", [

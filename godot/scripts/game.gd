@@ -105,7 +105,7 @@ func _setup_input() -> void:
 # нет, звучит запасной синтезированный звук.
 const RATE := 22050
 const SFX_DIR := "res://assets/sfx/"
-const LOOPS := ["steps", "gallop", "hoof_walk", "wind", "crickets", "campfire", "saloon", "river", "music_explore", "music_combat"]
+const LOOPS := ["steps", "steps_wood", "gallop", "hoof_walk", "wind", "crickets", "campfire", "saloon", "river", "music_explore", "music_combat", "music_town", "music_night"]
 ## синоним игрового события -> файл
 const ALIAS := {"horse": "neigh", "coin": "coins", "bounty": "stinger", "mark": "click"}
 
@@ -159,6 +159,31 @@ func play_at(sound: String, pos: Vector3, vol_db := 0.0, pitch := 1.0, range_m :
 	a.volume_db = vol_db
 	a.pitch_scale = pitch
 	a.play()
+
+
+## Голосовая реплика: роль (townm, sheriff, banda…) и номер фразы.
+## key — кто говорит (у одного говорящего не больше одной фразы за cd секунд),
+## pos — откуда звучит (null — «в голове», для героя).
+var _vo_last := {}
+var _vo_any := 0.0
+
+
+func vo(role: String, n: int, pos = null, key = null, cd := 6.0, vol_db := 0.0) -> bool:
+	var now := Time.get_ticks_msec() / 1000.0
+	var k = key if key != null else role
+	if now - float(_vo_last.get(k, -999.0)) < cd:
+		return false
+	# не больше одной фразы одновременно от разных людей рядом — чтобы не галдели
+	if pos != null and now - _vo_any < 1.2:
+		return false
+	_vo_last[k] = now
+	var snd := "vo_%s_%d" % [role, n]
+	if pos == null:
+		play(snd, vol_db)
+	else:
+		_vo_any = now
+		play_at(snd, pos, vol_db + 2.0, randf_range(0.97, 1.03), 9.0)
+	return true
 
 
 ## Петля без позиции (шаги, копыта, ветер, музыка): громкость задаётся каждый кадр.

@@ -19,6 +19,8 @@ var _current := ""
 var _turn := 0.0
 var _last_yaw := 0.0
 var _idle_t := 0.0
+var _dust: CPUParticles3D
+var _splash_t := 0.0
 
 
 func _ready() -> void:
@@ -125,6 +127,26 @@ func animate(speed: float, delta: float) -> void:
 	else:
 		_idle_t = 0.0
 		_play("Gallop" + side, clampf(speed / GALLOP_SPEED, 0.7, 1.5))
+	_hoof_fx(speed, delta)
+
+
+## Пыль из-под копыт на скаку, брызги в реке.
+func _hoof_fx(speed: float, delta: float) -> void:
+	if Game.world == null or Game.world.fx == null:
+		return
+	if _dust == null:
+		_dust = Game.world.fx.trail()
+		add_child(_dust)
+	var wet: bool = Game.world.in_water(global_position)
+	_dust.emitting = is_visible_in_tree() and speed > 4.5 and not wet
+	if wet and speed > 1.2 and is_visible_in_tree():
+		_splash_t -= delta
+		if _splash_t <= 0.0:
+			_splash_t = clampf(1.6 / speed, 0.12, 0.6)
+			var p := global_position + global_basis.z * randf_range(-0.8, 0.8)
+			Game.world.fx.splash(Vector3(p.x, -0.45, p.z), speed > 6.0)
+			if randf() < 0.5:
+				Game.play_at("splash", p, -10.0, randf_range(0.8, 1.2), 6.0)
 
 
 func play_death() -> void:

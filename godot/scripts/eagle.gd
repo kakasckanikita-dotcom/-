@@ -9,6 +9,7 @@ var height := 45.0
 var speed := 0.12
 var t := 0.0
 var model: Node3D
+var _cry_t := randf_range(10.0, 40.0)
 
 
 func _ready() -> void:
@@ -26,3 +27,8 @@ func _process(delta: float) -> void:
 	global_position = p
 	rotation.y = atan2(-vel.x, -vel.z)
 	rotation.z = -0.35 * signf(speed) # крен в вираже
+	_cry_t -= delta
+	if _cry_t <= 0.0:
+		_cry_t = randf_range(25.0, 70.0)
+		if Game.darkness() < 0.5 and Game.world and Game.world.player.global_position.distance_to(p) < 150.0:
+			Game.play_at("eagle", p, -6.0, randf_range(0.9, 1.1), 40.0)

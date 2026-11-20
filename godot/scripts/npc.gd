@@ -41,6 +41,10 @@ var name_label: Label3D
 var hp_bar: MeshInstance3D
 var _think := 0.0
 var _anim_acc := 0.0
+var voice := "" # набор голосовых реплик
+var _was_engaged := false
+var _was_fleeing := false
+var _chat_t := 0.0
 
 
 func setup(k: String, pos: Vector3) -> void:
@@ -56,6 +60,12 @@ func setup(k: String, pos: Vector3) -> void:
 	wt = pos
 	yaw = randf() * TAU
 	cd = randf_range(0.5, 1.5)
+	match k:
+		"bandit": voice = "banda" if randf() < 0.5 else "bandb"
+		"leader": voice = "banda"
+		"folk": voice = "townm"
+		"sheriff": voice = "sheriff"
+		"lawman": voice = "posse"
 
 
 func _ready() -> void:
@@ -173,6 +183,10 @@ func _physics_process(delta: float) -> void:
 				cd = randf_range(c.x, c.y)
 				if clip <= 0:
 					reload = 2.2
+					if voice == "bandb":
+						talk(3, 3.0)
+					elif voice == "banda" and randf() < 0.6:
+						talk(3, 3.0)
 	elif kind == "folk" and flee > 0.0:
 		flee -= delta
 		var away := -to_p / maxf(d, 0.01)
@@ -205,6 +219,7 @@ func _physics_process(delta: float) -> void:
 	if not Game.world.ground_move(self, before):
 		wt_t = 0.0 # упёрся в скалу — выбрать новую цель
 		strafe = -strafe
+	_voice_update(delta, engage, d, p)
 	var real_speed := velocity.length()
 	model.rotation.y = lerp_angle(model.rotation.y, yaw, minf(1.0, delta * 10.0))
 	model.aiming = engage
@@ -221,6 +236,56 @@ func _physics_process(delta: float) -> void:
 		horse_model.animate(real_speed, delta)
 
 
+## Сказать фразу n своим голосом (с паузой между фразами одного персонажа).
+func talk(n: int, cdv := 5.0) -> bool:
+	if voice == "" or dead:
+		return false
+	return Game.vo(voice, n, global_position + Vector3(0, head_height(), 0), get_instance_id(), cdv)
+
+
+## Реплики по ситуации: заметил героя, перестрелка, приветствие, паника.
+func _voice_update(delta: float, engage: bool, d: float, p) -> void:
+	_chat_t -= delta
+	if d > 45.0:
+		_was_engaged = engage
+		return
+	if engage and not _was_engaged:
+		match voice:
+			"banda": talk(1 if randf() < 0.6 else 2)
+			"bandb": talk(1)
+			"sheriff": talk(3)
+			"posse": talk(1 if randf() < 0.6 else 3)
+		_chat_t = randf_range(5.0, 9.0)
+	elif engage and _chat_t <= 0.0:
+		_chat_t = randf_range(7.0, 14.0)
+		match voice:
+			"banda": talk(4 if randf() < 0.5 else 3)
+			"bandb": talk(2)
+			"sheriff": talk(4)
+			"posse": talk(2 if randf() < 0.5 else 3)
+	elif not engage and not p.dead and _chat_t <= 0.0:
+		if kind == "folk":
+			var fleeing := flee > 0.0
+			var pspd: float = Vector2(p.move_vel.x, p.move_vel.z).length()
+			if fleeing and not _was_fleeing:
+				talk(5 if randf() < 0.6 else 4, 3.0)
+				_chat_t = randf_range(4.0, 7.0)
+			elif not fleeing and p.mounted and pspd > 6.0 and d < 4.5:
+				if talk(6, 8.0):
+					_chat_t = 8.0
+			elif not fleeing and p.model.aiming and d < 12.0:
+				if talk(4, 6.0):
+					_chat_t = 6.0
+			elif not fleeing and d < 5.0 and Game.wanted == 0:
+				if talk([1, 1, 2, 3].pick_random(), 40.0):
+					_chat_t = 12.0
+			_was_fleeing = fleeing
+		elif kind == "sheriff" and d < 6.0 and Game.wanted == 0:
+			if talk(1 if randf() < 0.5 else 2, 45.0):
+				_chat_t = 15.0
+	_was_engaged = engage
+
+
 func _shoot_at(p, target: Vector3, d: float, dmg: float) -> void:
 	var chance := clampf(0.8 - d / 90.0, 0.15, 0.8)
 	if p.mounted and p.move_vel.length() > 8.0:
@@ -231,9 +296,16 @@ func _shoot_at(p, target: Vector3, d: float, dmg: float) -> void:
 		p.hurt(dmg)
 	else:
 		end = target + Vector3(randf_range(-1.5, 1.5), randf_range(-0.8, 1.2), randf_range(-1.5, 1.5)) + (target - from).normalized() * 6.0
+		# пуля просвистела рядом с героем
+		if randf() < 0.75:
+			Game.play_at("whiz", target + (target - from).normalized() * 0.5, -3.0, randf_range(0.85, 1.2), 4.0)
+		if absf(end.y - Game.world.ground(end.x, end.z)) < 1.5:
+			Game.world.fx.dust(Vector3(end.x, Game.world.ground(end.x, end.z), end.z))
 	model.shoot_anim()
 	Game.world.fx.tracer(from, end)
 	Game.world.fx.muzzle(from)
+	if d < 60.0:
+		Game.world.fx.smoke(from, end - from)
 	Game.play_at("shot" if d < 55.0 else "shot_far", from, 0.0, randf_range(0.85, 1.05), 18.0)
 
 
@@ -245,6 +317,10 @@ func take_hit(dmg: float, by_player: bool) -> void:
 	Game.world.fx.blood(global_position + Vector3(0, 1.3, 0))
 	if hp > 0.0 and kind != "folk":
 		Game.play_at("hurt", global_position + Vector3(0, 1.6, 0), -4.0, randf_range(0.85, 1.15), 10.0)
+		if randf() < 0.45:
+			match voice:
+				"banda": talk(5, 4.0)
+				"bandb": talk(4, 4.0)
 	if by_player and kind in ["folk", "sheriff", "lawman"]:
 		if Game.wanted == 0:
 			Game.wanted = 1
@@ -267,6 +343,10 @@ func _die(by_player: bool) -> void:
 		model.position = Vector3(1.4, 0, 0)
 	model.set_dead(true)
 	Game.play_at("death", global_position + Vector3(0, 1.4, 0), -2.0, randf_range(0.9, 1.1), 10.0)
+	var fall_at := global_position
+	get_tree().create_timer(0.7 if not mounted else 1.0).timeout.connect(func():
+		Game.play_at("bodyfall", fall_at, -3.0, randf_range(0.9, 1.1), 8.0)
+		Game.world.fx.dust(fall_at + Vector3(0, 0.2, 0)))
 	if name_label:
 		name_label.visible = false
 	if by_player:
@@ -274,6 +354,8 @@ func _die(by_player: bool) -> void:
 			Game.honor += 3
 			Game.kills += 1
 			Game.world.drop_loot(global_position)
+			if randf() < 0.3:
+				get_tree().create_timer(1.0).timeout.connect(func(): Game.vo("hero", 3, null, "hero", 25.0, -3.0))
 		else:
 			Game.wanted = mini(5, Game.wanted + 1)
 			Game.honor -= 10
@@ -282,6 +364,7 @@ func _die(by_player: bool) -> void:
 			Game.bounty["done"] = true
 			Game.say("%s мёртв. Возвращайтесь к шерифу за наградой." % npc_name, Game.GOLD)
 			Game.play("bounty")
+			get_tree().create_timer(1.6).timeout.connect(func(): Game.vo("hero", 4, null, "hero", 0.0, -2.0))
 	if camp != null:
 		Game.world.check_camp(camp)
 
