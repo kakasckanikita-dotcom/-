@@ -7,6 +7,7 @@ extends Node3D
 ## Сверху — слой рук (прицел/выстрел/перезарядка), посадка в седло и езда.
 
 const ANIM_ROLES := ["Hips", "Spine", "Spine1", "Spine2", "Neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand", "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase", "RightUpLeg", "RightLeg", "RightFoot", "RightToeBase"]
+static var _ROLES_LONG: Array = ANIM_ROLES.duplicate()
 const TORSO := ["Hips", "Spine", "Spine1", "Spine2", "Neck", "Head"]
 ## перезарядка — только руки, без поворота корпуса
 const ARMS := ["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]
@@ -43,6 +44,8 @@ var _hand_mask := []
 
 var aiming := false
 var mounted := false
+var seated := false # сидит на стуле / скамье
+var _sip_t := 0.0
 var mount_k := 1.0 # 0..1 — ход анимации посадки (1 — сидит)
 var dead := false
 var gun: Node3D
@@ -118,6 +121,8 @@ static func _calibrate(clips: Array, ref: String) -> void:
 
 func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) -> void:
 	lib()
+	if _ROLES_LONG.size() == ANIM_ROLES.size() and _ROLES_LONG[0] == ANIM_ROLES[0]:
+		_ROLES_LONG.sort_custom(func(a, b): return a.length() > b.length())
 	fix = Node3D.new()
 	add_child(fix)
 	inst = Models.scene(model).instantiate()
@@ -200,7 +205,14 @@ func _role(bone_name: String) -> String:
 	var parts := n.split("_")
 	if parts.size() > 1 and parts[-1].is_valid_int():
 		parts.remove_at(parts.size() - 1)
-	return "_".join(parts)
+	var r := "_".join(parts)
+	if r in ANIM_ROLES:
+		return r
+	# приставки вроде «girlBone_Hips»: ищем роль в конце имени (сначала длинные)
+	for role in _ROLES_LONG:
+		if r.ends_with("_" + role) or r.ends_with(":" + role):
+			return role
+	return r
 
 
 func _gp(role: String) -> Vector3:
@@ -322,6 +334,9 @@ func animate(speed: float, delta: float) -> void:
 	if mounted:
 		_animate_mounted(speed, delta)
 		return
+	if seated:
+		_animate_seated(delta)
+		return
 	# ноги и корпус: стойка / шаг / бег с плавными переходами
 	_w_move = move_toward(_w_move, clampf((speed - 0.15) / 1.0, 0.0, 1.0), delta * 5.0)
 	_w_run = move_toward(_w_run, clampf((speed - 2.4) / 1.8, 0.0, 1.0), delta * 4.0)
@@ -414,6 +429,35 @@ func _animate_mounted(speed: float, delta: float) -> void:
 		_aim("LeftForeArm", "LeftHand", F * 0.8 - U * 0.12 + R * 0.38, al)
 		var ar := _aim("RightArm", "RightForeArm", -U * 0.95 + F * 0.12 + R * 0.1)
 		_aim("RightForeArm", "RightHand", F * 0.8 - U * 0.12 + L * 0.38, ar)
+
+
+## Сидит на стуле: спина прямая, бёдра вперёд, голени вниз, руки на столе;
+## время от времени подносит стакан ко рту.
+func _animate_seated(delta: float) -> void:
+	_idle_t += delta
+	_sip_t += delta
+	var pose: Array = _sample("idle", _idle_t, true).duplicate()
+	for i in ANIM_ROLES.size():
+		if ANIM_ROLES[i] in ["Hips", "Spine"]:
+			pose[i] = Quaternion()
+	pose[ANIM_ROLES.size()] = Vector3.ZERO
+	pose = _upper(pose, delta)
+	var glob := _apply(pose, true)
+	var L := -R
+	var tl := _aim("LeftUpLeg", "LeftLeg", F * 0.97 - U * 0.12 + L * 0.12)
+	_aim("LeftLeg", "LeftFoot", -U + F * 0.08, tl)
+	var tr := _aim("RightUpLeg", "RightLeg", F * 0.97 - U * 0.12 + R * 0.12)
+	_aim("RightLeg", "RightFoot", -U + F * 0.08, tr)
+	if _w_aim >= 0.5:
+		_aim_arm(glob)
+		return
+	var al := _aim("LeftArm", "LeftForeArm", -U * 0.75 + F * 0.4 + L * 0.15)
+	_aim("LeftForeArm", "LeftHand", F * 0.9 - U * 0.1 + R * 0.4, al)
+	# глоток: раз в несколько секунд правая рука поднимается ко рту
+	var cyc := fmod(_sip_t, 7.0)
+	var sip := smoothstep(4.5, 5.2, cyc) * (1.0 - smoothstep(6.0, 6.7, cyc))
+	var ar := _aim("RightArm", "RightForeArm", (-U * 0.75 + F * 0.4 + R * 0.15).lerp(-U * 0.6 + F * 0.55 + R * 0.25, sip))
+	_aim("RightForeArm", "RightHand", (F * 0.9 - U * 0.1 + L * 0.4).lerp(U * 0.95 + F * 0.2 + L * 0.35, sip), ar)
 
 
 ## Повернуть кость так, чтобы она смотрела в dir (пространство скелета).

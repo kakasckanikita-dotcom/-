@@ -205,8 +205,12 @@ func _physics_process(delta: float) -> void:
 
 	hint = ""
 	var b = Game.world.near_door(global_position)
-	if b:
-		hint = Game.world.NAMES[b["type"]]
+	if Game.world.interior.near_bartender(global_position):
+		hint = "Поговорить с барменом"
+	elif Game.world.interior.near_exit(global_position):
+		hint = "Выйти на улицу"
+	elif b:
+		hint = "Войти в салун" if b["type"] == "saloon" else Game.world.NAMES[b["type"]]
 	elif not mounted and global_position.distance_to(horse.global_position) < 3.5:
 		hint = "Сесть на коня"
 	_update_camera(real)
@@ -295,7 +299,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		interact()
 	elif event.is_action_pressed("reload"):
 		start_reload()
-	elif event.is_action_pressed("whistle") and not mounted:
+	elif event.is_action_pressed("whistle") and not mounted and not Game.world.interior.inside:
 		horse.called = true
 		Game.play("whistle", -4.0)
 		get_tree().create_timer(0.9).timeout.connect(func(): Game.vo("hero", 1, null, "hero_call", 12.0, -2.0))
@@ -428,12 +432,27 @@ func start_reload() -> void:
 
 
 func interact() -> void:
-	var b = Game.world.near_door(global_position)
+	var w = Game.world
+	if w.interior.near_bartender(global_position):
+		cancel_focus()
+		w.hud.open_building(w.interior.building)
+		return
+	if w.interior.near_exit(global_position):
+		w.hud.fade(func(): w.interior.leave())
+		Game.play("door", -6.0)
+		return
+	var b = w.near_door(global_position)
 	if b:
 		if mounted:
 			dismount()
+			return
 		cancel_focus()
-		Game.world.hud.open_building(b)
+		if b["type"] == "saloon":
+			# в салун — заходим внутрь, меню у бармена
+			w.hud.fade(func(): w.interior.enter(b))
+			Game.play("door", -6.0)
+		else:
+			w.hud.open_building(b)
 	elif mounted:
 		dismount()
 	elif global_position.distance_to(horse.global_position) < 3.5:

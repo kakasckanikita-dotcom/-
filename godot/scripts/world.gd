@@ -34,6 +34,8 @@ const GroundShader := preload("res://scripts/ground.gdshader")
 const SkyShader := preload("res://scripts/sky.gdshader")
 const RoadShader := preload("res://scripts/road.gdshader")
 const VegScript := preload("res://scripts/veg.gd")
+const InteriorScript := preload("res://scripts/interior.gd")
+var interior: Node3D
 var road_mat: ShaderMaterial
 const TerrainScript := preload("res://scripts/terrain.gd")
 const WaterShader := preload("res://scripts/water.gdshader")
@@ -100,6 +102,11 @@ func _ready() -> void:
 	for c in camps:
 		populate_camp(c)
 	_spawn_animals()
+	# зал салуна
+	interior = InteriorScript.new()
+	add_child(interior)
+	interior.build(self)
+	interior.populate()
 
 	_setup_audio()
 
@@ -206,6 +213,8 @@ func on_bridge(z: float) -> bool:
 
 ## Высота земли в точке (0 там, где рельеф ещё не построен).
 func ground(x: float, z: float) -> float:
+	if interior and interior.contains(x, z):
+		return interior.ORIGIN.y
 	return terrain.height(x, z) if terrain else 0.0
 
 
@@ -1034,8 +1043,10 @@ func _update_audio(delta: float) -> void:
 	Game.loop_set("hoof_walk", walk * 0.6, clampf(spd / 1.8, 0.7, 1.6))
 	Game.loop_set("gallop", gallop * 0.7, clampf(spd / 13.0, 0.8, 1.25))
 	# окружение: ветер днём, сверчки ночью
-	Game.loop_set("wind", lerpf(0.32, 0.15, dk) * (1.3 if town_at(pp) == null else 0.7))
-	Game.loop_set("crickets", dk * 0.45)
+	var indoor: bool = interior != null and interior.inside
+	var outk := 0.15 if indoor else 1.0 # в зале улица еле слышна
+	Game.loop_set("wind", lerpf(0.32, 0.15, dk) * (1.3 if town_at(pp) == null else 0.7) * outk)
+	Game.loop_set("crickets", dk * 0.45 * outk)
 	# в городе днём слышны голоса с крылец и из окон
 	_chatter_t -= delta
 	if _chatter_t <= 0.0:
@@ -1053,7 +1064,7 @@ func _update_audio(delta: float) -> void:
 	# мирная музыка зависит от места и времени: город днём, ночь, дорога
 	var in_town: bool = town_at(pp) != null
 	var night := dk > 0.6
-	var calm: bool = not fight and not p.dead
+	var calm: bool = not fight and not p.dead and not (interior != null and interior.inside)
 	_music_explore = move_toward(_music_explore, 0.28 if calm and not in_town and not night else 0.0, delta * 0.12)
 	_music_town = move_toward(_music_town, 0.24 if calm and in_town and not night else 0.0, delta * 0.12)
 	_music_night = move_toward(_music_night, 0.3 if calm and night else 0.0, delta * 0.1)

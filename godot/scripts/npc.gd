@@ -43,6 +43,9 @@ var _think := 0.0
 var _anim_acc := 0.0
 var voice := "" # набор голосовых реплик
 var body := "npc" # модель тела
+var pose_mode := "" # "" — ходит; "sit" — сидит; "stand" — стоит на месте; "chat" — беседует
+var indoor := false
+var seat_h := 0.62 # высота сиденья для pose_mode = "sit"
 var _was_engaged := false
 var _was_fleeing := false
 var _chat_t := 0.0
@@ -109,6 +112,9 @@ func rebuild() -> void:
 	model = RigScript.new()
 	add_child(model)
 	model.build(body, height, tint if body == "npc" else Color.WHITE, kind != "folk")
+	if pose_mode == "sit":
+		model.seated = true
+		model.position.y = seat_h - model.hip_y + model.sit_h
 	if mounted:
 		model.mounted = true
 		model.position = horse_model.rider_pos(yaw, model.hip_y, model.sit_h)
@@ -194,6 +200,10 @@ func _physics_process(delta: float) -> void:
 						talk(3, 3.0)
 					elif voice == "banda" and randf() < 0.6:
 						talk(3, 3.0)
+	elif kind == "folk" and pose_mode != "" and (flee <= 0.0 or indoor or pose_mode == "sit"):
+		# сидит, стоит у стены или беседует — на месте, лицом куда поставили
+		if pose_mode == "chat" and d < 8.0 and not p.dead:
+			pass
 	elif kind == "folk" and flee > 0.0:
 		flee -= delta
 		var away := -to_p / maxf(d, 0.01)

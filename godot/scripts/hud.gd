@@ -24,6 +24,9 @@ var font: Font
 var tfont: Font # заголовки
 var hit_t := 0.0 # отметка попадания у прицела
 var hit_kill := false
+var _fade := 0.0 # затемнение экрана при переходах
+var _fade_dir := 0.0
+var _fade_cb: Callable
 
 
 func _ready() -> void:
@@ -54,6 +57,12 @@ func _on_toast(text: String, color: Color) -> void:
 		toasts.pop_front()
 
 
+## Плавно затемнить экран, сделать cb (например, перенести героя), открыть.
+func fade(cb: Callable) -> void:
+	_fade_cb = cb
+	_fade_dir = 1.0
+
+
 ## Попадание по цели: белая отметка, при убийстве — красная.
 func hit(kill: bool) -> void:
 	hit_kill = kill
@@ -67,6 +76,14 @@ func ui_open() -> bool:
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.01)
 	hit_t = maxf(0.0, hit_t - real)
+	if _fade_dir != 0.0:
+		_fade = clampf(_fade + _fade_dir * real * 3.0, 0.0, 1.0)
+		if _fade >= 1.0 and _fade_dir > 0.0:
+			_fade_dir = -1.0
+			if _fade_cb.is_valid():
+				_fade_cb.call()
+		elif _fade <= 0.0 and _fade_dir < 0.0:
+			_fade_dir = 0.0
 	for t in toasts:
 		t["life"] -= real
 	while not toasts.is_empty() and toasts[0]["life"] <= 0.0:
@@ -74,7 +91,7 @@ func _process(delta: float) -> void:
 	var s := 130.0 if size.y < 600.0 else 170.0
 	minimap.size = Vector2(s, s)
 	minimap.position = Vector2(size.x - s - 14, 82)
-	minimap.visible = not ui_open() and Game.world != null
+	minimap.visible = not ui_open() and Game.world != null and not (Game.world.interior and Game.world.interior.inside)
 	minimap.queue_redraw()
 	if not Game.touch_mode:
 		var want := Input.MOUSE_MODE_VISIBLE if ui_open() else Input.MOUSE_MODE_CAPTURED
@@ -570,6 +587,8 @@ func _draw() -> void:
 		draw_texture_rect(UiKit.vignette(), Rect2(Vector2.ZERO, W), false, Color(0, 0, 0, minf(1.0, pl.dead_t * 0.5)))
 		_text(W / 2, "ВЫ ПОГИБЛИ", 64, Color("c83a2a"), 0, tfont)
 		_text(W / 2 + Vector2(0, 40), "Пустыня не прощает ошибок", 22, Game.CREAM)
+	if _fade > 0.0:
+		draw_rect(Rect2(Vector2.ZERO, W), Color(0, 0, 0, _fade))
 
 
 func _draw_big_map() -> void:
