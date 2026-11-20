@@ -884,7 +884,7 @@ func _update_audio(delta: float) -> void:
 	# мирная музыка зависит от места и времени: город днём, ночь, дорога
 	var in_town: bool = town_at(pp) != null
 	var night := dk > 0.6
-	var calm := not fight and not p.dead
+	var calm: bool = not fight and not p.dead
 	_music_explore = move_toward(_music_explore, 0.28 if calm and not in_town and not night else 0.0, delta * 0.12)
 	_music_town = move_toward(_music_town, 0.24 if calm and in_town and not night else 0.0, delta * 0.12)
 	_music_night = move_toward(_music_night, 0.3 if calm and night else 0.0, delta * 0.1)
@@ -902,11 +902,11 @@ var _tumble_mesh: Array = []
 
 func _make_tumbleweed() -> Node3D:
 	var root := Node3D.new()
-	var m := Mk.mat(Color("8a7048"), 1.0)
-	for i in 4:
+	var m := Mk.mat(Color("7a5e3a"), 1.0)
+	for i in 7:
 		var t := TorusMesh.new()
-		t.inner_radius = randf_range(0.26, 0.34)
-		t.outer_radius = t.inner_radius + 0.035
+		t.inner_radius = randf_range(0.18, 0.36)
+		t.outer_radius = t.inner_radius + 0.06
 		t.rings = 10
 		t.ring_segments = 3
 		t.material = m

@@ -165,7 +165,7 @@ func play_at(sound: String, pos: Vector3, vol_db := 0.0, pitch := 1.0, range_m :
 ## key — кто говорит (у одного говорящего не больше одной фразы за cd секунд),
 ## pos — откуда звучит (null — «в голове», для героя).
 var _vo_last := {}
-var _vo_any := 0.0
+var _vo_any := -999.0
 
 
 func vo(role: String, n: int, pos = null, key = null, cd := 6.0, vol_db := 0.0) -> bool:

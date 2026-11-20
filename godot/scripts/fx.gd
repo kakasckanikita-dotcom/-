@@ -109,7 +109,7 @@ func _puffs(col: Color, n: int, life: float, size: float, grow: float) -> CPUPar
 
 ## Пороховой дым из ствола: облачко вылетает вперёд и медленно поднимается.
 func smoke(p: Vector3, dir: Vector3) -> void:
-	var cp := _puffs(Color(0.82, 0.8, 0.76, 0.55), 7, 1.6, 0.35, 2.6)
+	var cp := _puffs(Color(0.85, 0.83, 0.8, 0.7), 9, 1.8, 0.55, 3.0)
 	cp.one_shot = true
 	cp.explosiveness = 0.9
 	cp.direction = dir.normalized() if dir.length() > 0.01 else Vector3.UP
@@ -168,7 +168,7 @@ func splash(p: Vector3, big := false) -> void:
 
 ## Пыль из-под копыт или ног: постоянный излучатель, включается по скорости.
 func trail() -> CPUParticles3D:
-	var cp := _puffs(Color(0.76, 0.66, 0.5, 0.38), 18, 1.4, 0.7, 3.0)
+	var cp := _puffs(Color(0.78, 0.66, 0.48, 0.55), 24, 1.6, 1.1, 3.0)
 	cp.emitting = false
 	cp.local_coords = false
 	cp.direction = Vector3.UP
