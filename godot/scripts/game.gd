@@ -58,10 +58,10 @@ func say(text: String, color := CREAM) -> void:
 ## 0 — день, 1 — глубокая ночь.
 func darkness() -> float:
 	var h := game_time / 60.0
-	if h >= 7.0 and h < 18.0:
+	if h >= 7.0 and h < 19.0:
 		return 0.0
-	if h >= 18.0 and h < 21.0:
-		return (h - 18.0) / 3.0
+	if h >= 19.0 and h < 21.5:
+		return (h - 19.0) / 2.5
 	if h >= 5.0 and h < 7.0:
 		return 1.0 - (h - 5.0) / 2.0
 	return 1.0

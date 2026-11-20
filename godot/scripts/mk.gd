@@ -86,10 +86,11 @@ static func label(parent: Node3D, text: String, pos: Vector3, px: int, c: Color,
 
 
 ## Плоская полоса по точкам (дорога, река) на высоте y.
-static func strip(points: Array, width: float, y: float, c: Color, rough := 0.95) -> MeshInstance3D:
+static func strip(points: Array, width: float, y: float, c: Color, rough := 0.95, material: Material = null) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_normal(Vector3.UP)
+	var along := 0.0
 	for i in points.size() - 1:
 		var a: Vector2 = points[i]
 		var b: Vector2 = points[i + 1]
@@ -98,12 +99,17 @@ static func strip(points: Array, width: float, y: float, c: Color, rough := 0.95
 		# продлеваем отрезок на полширины, чтобы стыки не зияли
 		var a2 := a - d * width * 0.5
 		var b2 := b + d * width * 0.5
+		var seg := a2.distance_to(b2)
 		var v := [Vector3(a2.x + n.x, y, a2.y + n.y), Vector3(a2.x - n.x, y, a2.y - n.y), Vector3(b2.x - n.x, y, b2.y - n.y), Vector3(b2.x + n.x, y, b2.y + n.y)]
+		# UV: x — поперёк полосы (0..1), y — вдоль в метрах
+		var uv := [Vector2(0, along), Vector2(1, along), Vector2(1, along + seg), Vector2(0, along + seg)]
 		for idx in [0, 1, 2, 0, 2, 3]:
+			st.set_uv(uv[idx])
 			st.add_vertex(v[idx])
+		along += a.distance_to(b)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	mi.material_override = mat(c, rough)
+	mi.material_override = material if material else mat(c, rough)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
 

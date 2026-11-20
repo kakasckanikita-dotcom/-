@@ -31,6 +31,10 @@ const FxScript := preload("res://scripts/fx.gd")
 const AnimalScript := preload("res://scripts/animal.gd")
 const EagleScript := preload("res://scripts/eagle.gd")
 const GroundShader := preload("res://scripts/ground.gdshader")
+const SkyShader := preload("res://scripts/sky.gdshader")
+const RoadShader := preload("res://scripts/road.gdshader")
+const VegScript := preload("res://scripts/veg.gd")
+var road_mat: ShaderMaterial
 const TerrainScript := preload("res://scripts/terrain.gd")
 const WaterShader := preload("res://scripts/water.gdshader")
 
@@ -51,7 +55,7 @@ var _music_explore := 0.0
 var _music_combat := 0.0
 
 var env: Environment
-var sky_mat: ProceduralSkyMaterial
+var sky_mat: ShaderMaterial
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var _static: StaticBody3D
@@ -119,16 +123,33 @@ func _setup_environment() -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sun_angle_max = 20.0
+	sky_mat = ShaderMaterial.new()
+	sky_mat.shader = SkyShader
+	sky_mat.set_shader_parameter("cloud_noise", _noise_tex(21, 0.006, 512))
+	sky_mat.set_shader_parameter("detail_noise", _noise_tex(57, 0.03, 256))
 	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_sky_contribution = 0.6
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_sky_contribution = 0.55
+	# кинематографичная картинка: мягкий тонмаппинг, лёгкое свечение,
+	# тёплая цветокоррекция и дымка вдали
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 0.95
+	env.tonemap_white = 6.0
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.1
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.12
 	env.fog_enabled = true
-	env.fog_density = 0.0016
-	env.fog_sky_affect = 0.3
+	env.fog_density = 0.0011
+	env.fog_sky_affect = 0.15
+	env.fog_aerial_perspective = 0.4
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -148,7 +169,7 @@ func _setup_environment() -> void:
 func _update_sky() -> void:
 	var h := Game.game_time / 60.0
 	var dk := Game.darkness()
-	var elev := (h - 6.0) / 12.0 * PI # 0 на рассвете, PI/2 в полдень
+	var elev := (h - 6.0) / 13.5 * PI # 0 на рассвете (6:00), PI/2 в 12:45, закат в 19:30
 	sun.rotation = Vector3(-clampf(elev, -0.3, PI + 0.3), deg_to_rad(-35), 0)
 	var day_k := clampf(sin(elev) * 3.0, 0.0, 1.0)
 	sun.light_energy = day_k * 1.0
@@ -157,11 +178,17 @@ func _update_sky() -> void:
 	sun.light_color = Color(1.0, 0.95, 0.85).lerp(Color(1.0, 0.6, 0.35), dusk)
 	moon.light_energy = dk * 0.35
 	moon.visible = dk > 0.01
-	sky_mat.sky_top_color = Color("3d74c4").lerp(Color("070b1c"), dk)
-	sky_mat.sky_horizon_color = Color("d9bf9c").lerp(Color("e08850"), dusk).lerp(Color("1a1d33"), dk)
-	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-	sky_mat.ground_bottom_color = Color("8a6a48").lerp(Color("0a0a12"), dk)
-	env.ambient_light_energy = lerpf(0.65, 0.18, dk)
+	var top := Color("3a6fc0").lerp(Color("4a5a9a"), dusk * 0.5).lerp(Color("060914"), dk)
+	var hor := Color("dcc6a2").lerp(Color("f09858"), dusk).lerp(Color("161a2e"), dk)
+	sky_mat.set_shader_parameter("top_color", top)
+	sky_mat.set_shader_parameter("horizon_color", hor)
+	sky_mat.set_shader_parameter("ground_color", Color("8a6a48").lerp(Color("0a0a12"), dk))
+	sky_mat.set_shader_parameter("sun_tint", Color(1.0, 0.92, 0.75).lerp(Color(1.0, 0.55, 0.3), dusk))
+	sky_mat.set_shader_parameter("night", dk)
+	sky_mat.set_shader_parameter("dusk", dusk)
+	sky_mat.set_shader_parameter("moon_dir", -moon.global_basis.z)
+	env.ambient_light_energy = lerpf(0.75, 0.3, dk) + dusk * 0.25
+	env.ambient_light_color = Color(0.78, 0.74, 0.68).lerp(Color(0.95, 0.65, 0.5), dusk).lerp(Color(0.22, 0.27, 0.42), dk)
 	env.fog_light_color = Color("b9a07c").lerp(Color("e08850"), dusk * 0.6).lerp(Color("10131f"), dk)
 
 
@@ -229,19 +256,63 @@ func _noise_tex(seed_v: int, freq: float, size := 256) -> NoiseTexture2D:
 	return t
 
 
+var _nn: NoiseTexture2D
+
+
+func _normal_noise() -> NoiseTexture2D:
+	if _nn == null:
+		_nn = _noise_tex(29, 0.04)
+		_nn.as_normal_map = true
+		_nn.bump_strength = 6.0
+	return _nn
+
+
+func _road_material() -> ShaderMaterial:
+	if road_mat == null:
+		road_mat = ShaderMaterial.new()
+		road_mat.shader = RoadShader
+		road_mat.set_shader_parameter("noise_small", _noise_tex(3, 0.02))
+		road_mat.set_shader_parameter("noise_normal", _normal_noise())
+	return road_mat
+
+
 func _build_ground() -> void:
 	var gm := ShaderMaterial.new()
 	gm.shader = GroundShader
 	gm.set_shader_parameter("noise_small", _noise_tex(3, 0.02))
 	gm.set_shader_parameter("noise_big", _noise_tex(11, 0.01))
+	gm.set_shader_parameter("noise_normal", _normal_noise())
+	# ячейки (клеточный шум) — трещины в сухой глине
+	var cn := FastNoiseLite.new()
+	cn.noise_type = FastNoiseLite.TYPE_CELLULAR
+	cn.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
+	cn.frequency = 0.03
+	cn.seed = 5
+	var ct := NoiseTexture2D.new()
+	ct.width = 256
+	ct.height = 256
+	ct.seamless = true
+	ct.noise = cn
+	ct.normalize = true
+	gm.set_shader_parameter("cells", ct)
+	# камешки: центры ячеек — круглые пятнышки
+	var pn := FastNoiseLite.new()
+	pn.noise_type = FastNoiseLite.TYPE_CELLULAR
+	pn.cellular_return_type = FastNoiseLite.RETURN_DISTANCE
+	pn.frequency = 0.08
+	pn.seed = 9
+	var pt := NoiseTexture2D.new()
+	pt.width = 256
+	pt.height = 256
+	pt.seamless = true
+	pt.noise = pn
+	pt.normalize = true
+	gm.set_shader_parameter("pebbles", pt)
 	terrain = TerrainScript.new()
 	add_child(terrain)
 	terrain.build(self, gm)
 	for r in roads:
-		var road := Mk.strip(r, 7.0, 0.02, Color("a8845a"))
-		add_child(road)
-		var rut := Mk.strip(r, 1.0, 0.03, Color("94714c"))
-		add_child(rut)
+		add_child(Mk.strip(r, 7.5, 0.02, Color.WHITE, 0.95, _road_material()))
 	# река
 	var centers := PackedVector2Array()
 	var z := -400.0
@@ -279,8 +350,9 @@ func _make_town(town_name: String, c: Vector2) -> void:
 	towns.append(t)
 	var north := ["saloon", "store", "sheriff", "house", "house"]
 	var south := ["house", "bank", "house", "hotel", "house"]
-	var street := Mk.box(self, Vector3(90, 0.02, 18), Vector3(c.x, 0.01, c.y), Color("a8845a"))
-	street.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var street_mat := _road_material().duplicate() as ShaderMaterial
+	street_mat.set_shader_parameter("ruts", 0.35)
+	add_child(Mk.strip([c - Vector2(45, 0), c + Vector2(45, 0)], 19.0, 0.025, Color.WHITE, 0.95, street_mat))
 	for i in 5:
 		var x := c.x - 30.0 + i * 15.0
 		_building(t, north[i], x, c.y - 9.0, 1.0)
@@ -299,11 +371,107 @@ func _make_town(town_name: String, c: Vector2) -> void:
 	coach.position = Vector3(c.x + 22.0, 0, c.y + 4.5)
 	add_child(coach)
 	_box_collider(coach.position, Models.size_of(coach))
+	_decorate_town(t, c)
 	for i in 6:
 		var barrel := Models.group_prop("western", "Barrel", 0.9, "h", rng.randf() * TAU)
 		barrel.position = Vector3(c.x + rng.randf_range(-38, 38), 0, c.y + (7.5 if i % 2 == 0 else -7.5))
 		add_child(barrel)
 		_collider(Vector2(barrel.position.x, barrel.position.z), 0.4, 1.0)
+
+
+var town_lights: Array = [] # фонари на крыльцах — зажигаются ночью
+
+
+## Объект из набора с материалом-заменой (для моделей без текстур).
+func _prop(model: String, size: float, pos: Vector3, yaw := 0.0, fit := "max", tint := Color(0, 0, 0, 0)) -> Node3D:
+	var m := Models.prop(model, size, fit, yaw)
+	m.position = Vector3(pos.x, ground(pos.x, pos.z) if pos.y == 0.0 else pos.y, pos.z)
+	add_child(m)
+	if tint.a > 0.0:
+		var mat := Mk.mat(tint, 0.85)
+		for mi in Models.meshes(m):
+			mi.material_override = mat
+	return m
+
+
+## Улица оживает: коновязи с корытами у салуна, лавки и шерифа, фонари на
+## крыльцах, бочки, телега, виселица в конце улицы, ветряк с водокачкой.
+func _decorate_town(t: Dictionary, c: Vector2) -> void:
+	var wood := Color("6b4a2e")
+	for i in 3:
+		var x := c.x - 30.0 + i * 15.0
+		_prop("p_hitch", 2.6, Vector3(x - 2.5, 0, c.y - 6.2), 0.0, "max", wood)
+		_collider(Vector2(x - 2.5, c.y - 6.2), 0.3, 1.0)
+		_prop("p_trough", 2.0, Vector3(x + 2.6, 0, c.y - 6.4), 0.0, "max", Color("5e4630"))
+		_box_collider(Vector3(x + 2.6, 0, c.y - 6.4), Vector3(2.0, 0.9, 1.0))
+	# фонари на столбах вдоль улицы (с обеих сторон)
+	for i in 4:
+		for side in [-1.0, 1.0]:
+			var x: float = c.x - 34.0 + i * 22.0 + (6.0 if side > 0.0 else 0.0)
+			var z: float = c.y + side * 7.6
+			var pole := Mk.box(self, Vector3(0.14, 3.0, 0.14), Vector3(x, 1.5, z), Color("4a3220"))
+			pole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			Mk.box(self, Vector3(0.7, 0.1, 0.1), Vector3(x, 2.95, z - side * 0.3), Color("4a3220"))
+			var lamp := _prop("p_lantern", 0.45, Vector3(x, 2.25, z - side * 0.6), 0.0, "h")
+			var l := OmniLight3D.new()
+			l.light_color = Color(1.0, 0.72, 0.4)
+			l.omni_range = 13.0
+			l.omni_attenuation = 0.9
+			l.light_energy = 0.0
+			l.visible = false
+			l.position = Vector3(x, 2.5, z - side * 0.6)
+			add_child(l)
+			# пламя: светится само (и даёт ореол через glow)
+			var flame := MeshInstance3D.new()
+			var fm := SphereMesh.new()
+			fm.radius = 0.07
+			fm.height = 0.16
+			fm.radial_segments = 6
+			fm.rings = 3
+			flame.mesh = fm
+			var fmat := StandardMaterial3D.new()
+			fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			fmat.albedo_color = Color(1.0, 0.75, 0.35)
+			fmat.emission_enabled = true
+			fmat.emission = Color(1.0, 0.6, 0.25)
+			fmat.emission_energy_multiplier = 4.0
+			flame.material_override = fmat
+			flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			flame.position = Vector3(x, 2.48, z - side * 0.6)
+			flame.visible = false
+			add_child(flame)
+			town_lights.append([l, flame])
+			_collider(Vector2(x, z), 0.15, 3.0)
+	_prop("p_barrels", 1.1, Vector3(c.x - 21.0, 0, c.y + 7.0), rng.randf() * TAU, "h")
+	_prop("p_barrels", 1.0, Vector3(c.x + 9.0, 0, c.y - 7.2), rng.randf() * TAU, "h")
+	var cart := _prop("p_cart", 4.2, Vector3(c.x - 38.0, 0, c.y + 5.5), PI * 0.5 + 0.2)
+	_box_collider(cart.position, Models.size_of(cart))
+	var gal := _prop("p_gallows", 4.5, Vector3(c.x + 44.0, 0, c.y - 11.0), PI * 0.5, "h")
+	_box_collider(gal.position, Models.size_of(gal) * Vector3(1, 1, 1))
+	var wm := _prop("p_windmill", 10.0, Vector3(c.x - 62.0, 0, c.y + 16.0), 0.4, "h")
+	_box_collider(wm.position, Models.size_of(wm) * Vector3(0.7, 1, 0.7))
+	_prop("p_skull", 0.6, Vector3(c.x + 47.0, 0.0, c.y + 8.0), 1.0)
+	# загон для коров за городом (с воротами к городу)
+	var x0 := c.x - 28.0
+	var x1 := c.x + 28.0
+	var z0 := c.y - 64.0
+	var z1 := c.y - 40.0
+	var x := x0
+	while x < x1 - 0.1:
+		_prop("p_fence", 4.0, Vector3(x + 2.0, 0, z0), PI * 0.5)
+		if absf(x + 2.0 - c.x) > 3.0: # ворота посередине ближней стороны
+			_prop("p_fence", 4.0, Vector3(x + 2.0, 0, z1), PI * 0.5)
+		x += 4.0
+	_box_collider(Vector3(c.x, 0, z0), Vector3(56.0, 1.4, 0.3))
+	_box_collider(Vector3(c.x - 16.0, 0, z1), Vector3(24.0, 1.4, 0.3))
+	_box_collider(Vector3(c.x + 16.0, 0, z1), Vector3(24.0, 1.4, 0.3))
+	_box_collider(Vector3(x0, 0, (z0 + z1) / 2.0), Vector3(0.3, 1.4, 24.0))
+	_box_collider(Vector3(x1, 0, (z0 + z1) / 2.0), Vector3(0.3, 1.4, 24.0))
+	var z := z0
+	while z < z1 - 0.1:
+		_prop("p_fence", 4.0, Vector3(x0, 0, z + 2.0))
+		_prop("p_fence", 4.0, Vector3(x1, 0, z + 2.0))
+		z += 4.0
 
 
 ## Здание вдоль улицы. edge — z края улицы; face: +1 — фасад смотрит на юг (+Z).
@@ -421,36 +589,29 @@ func _gen_obstacles() -> void:
 		rock_at[gi].append(Transform3D(b, Vector3(p.x, ground(p.x, p.y) - r * 0.25, p.y)))
 		_collider(p, r * 0.95, r * 1.5)
 		obstacles.append([p, r * 1.1])
+	# сухие деревья и коровьи черепа
+	for i in 70:
+		var p := Vector2(rng.randf_range(0, WORLD), rng.randf_range(0, WORLD))
+		if not _free_spot(p, 5.0) or (terrain and terrain.normal_at(p.x, p.y).y < 0.9):
+			continue
+		var tree := _prop("p_deadtree" if rng.randf() < 0.6 else "p_deadtree2", rng.randf_range(4.0, 7.0), Vector3(p.x, 0, p.y), rng.randf() * TAU)
+		tree.position.y -= 0.15
+		_collider(p, 0.35, 4.0)
+		obstacles.append([p, 1.0])
+	for i in 50:
+		var p := Vector2(rng.randf_range(0, WORLD), rng.randf_range(0, WORLD))
+		if _free_spot(p, 2.0):
+			var sk := _prop("p_skull", rng.randf_range(0.45, 0.65), Vector3(p.x, 0, p.y), rng.randf() * TAU)
+			sk.rotation.z = rng.randf_range(-0.3, 0.3)
 	for i in cactus_groups.size():
 		_mm_group(cactus_groups[i], cactus_at[i], true, Color("55703f"))
 	for i in rock_groups.size():
 		_mm_group(rock_groups[i], rock_at[i], true)
 
 	# трава и сухие кусты (только вид, без столкновений)
-	var tufts: Array[Transform3D] = []
-	var bushes: Array[Transform3D] = []
-	for i in 3500:
-		var p := Vector2(rng.randf_range(0, WORLD), rng.randf_range(0, WORLD))
-		if in_water(_v3(p)) or near_road(p, 4.0) or town_at(_v3(p)) != null:
-			continue
-		var s := rng.randf_range(0.6, 1.4)
-		if rng.randf() < 0.85:
-			tufts.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * s), Vector3(p.x, ground(p.x, p.y) + 0.17 * s, p.y)))
-		else:
-			bushes.append(Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(p.x, ground(p.x, p.y) + 0.2 * s, p.y)))
-	var tm := CylinderMesh.new()
-	tm.top_radius = 0.0
-	tm.bottom_radius = 0.16
-	tm.height = 0.34
-	tm.radial_segments = 4
-	tm.rings = 1
-	_multimesh(tm, tufts, Color("66642f"), [], false)
-	var bm := SphereMesh.new()
-	bm.radial_segments = 6
-	bm.rings = 3
-	bm.radius = 0.6
-	bm.height = 1.2
-	_multimesh(bm, bushes, Color("6e6240"), [], false)
+	var veg := VegScript.new()
+	add_child(veg)
+	veg.build(self)
 
 
 func _cyl_mesh(rt: float, rb: float, h: float) -> CylinderMesh:
@@ -780,6 +941,14 @@ func _process(delta: float) -> void:
 	_update_audio(delta)
 	_update_tumbleweeds(delta)
 	player.lantern.light_energy = Game.darkness() * 1.1
+	# фонари на улицах горят ночью; включены только ближние — так дешевле
+	var dk_l := Game.darkness()
+	for e in town_lights:
+		var l: OmniLight3D = e[0]
+		var on := dk_l > 0.35 and l.global_position.distance_squared_to(player.global_position) < 70.0 * 70.0
+		l.visible = on
+		l.light_energy = dk_l * 2.6
+		e[1].visible = dk_l > 0.35
 
 
 func _update_law(delta: float) -> void:
