@@ -45,6 +45,11 @@ var _hand_mask := []
 var aiming := false
 var mounted := false
 var seated := false # сидит на стуле / скамье
+var crouch := 0.0 # 0..1 — присел на колено за укрытием
+var _crouch_w := 0.0
+var _fix_y0 := 0.0
+var _flinch_t := 0.0 # вздрогнул от попадания
+var _flinch_side := 1.0
 var _sip_t := 0.0
 var mount_k := 1.0 # 0..1 — ход анимации посадки (1 — сидит)
 var dead := false
@@ -154,6 +159,7 @@ func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) 
 	var foot_p := xf * (_gp("LeftFoot") + _gp("RightFoot")) * 0.5
 	var hips_p := xf * _gp("Hips")
 	fix.position = Vector3(-hips_p.x, -foot_p.y + 0.1, -hips_p.z)
+	_fix_y0 = fix.position.y
 	hip_y = hips_p.y - foot_p.y + 0.1
 	# сидя человек опирается на седалищные кости: чуть ниже тазобедренных суставов
 	var ul := xf * ((_gp("LeftUpLeg") + _gp("RightUpLeg")) * 0.5)
@@ -352,7 +358,44 @@ func animate(speed: float, delta: float) -> void:
 		var run := _sample(RUN, _phase * rl, true)
 		pose = _mix(pose, _mix(walk, run, _w_run), _w_move)
 	pose = _upper(pose, delta)
-	_aim_arm(_apply(pose))
+	var glob := _apply(pose)
+	_crouch_w = move_toward(_crouch_w, crouch if speed < 1.5 else 0.0, delta * 4.0)
+	fix.position.y = _fix_y0 - _crouch_w * hip_y * 0.5
+	if _crouch_w > 0.05:
+		_kneel(_crouch_w)
+	_aim_arm(glob)
+	_flinch(delta)
+
+
+## На одно колено: левая стопа впереди, правое колено на земле.
+func _kneel(w: float) -> void:
+	var L := -R
+	var tl := _aim("LeftUpLeg", "LeftLeg", (-U).lerp(F * 0.85 - U * 0.5 + L * 0.12, w))
+	_aim("LeftLeg", "LeftFoot", (-U).lerp(-U - F * 0.25, w), tl)
+	var tr := _aim("RightUpLeg", "RightLeg", (-U).lerp(-U * 0.9 + F * 0.15 + R * 0.12, w))
+	_aim("RightLeg", "RightFoot", (-U).lerp(-F - U * 0.15, w), tr)
+
+
+## Попадание: корпус откидывается назад и вбок, плечи вздрагивают.
+func flinch() -> void:
+	_flinch_t = 0.35
+	_flinch_side = -1.0 if randf() < 0.5 else 1.0
+
+
+func _flinch(delta: float) -> void:
+	if _flinch_t <= 0.0:
+		return
+	_flinch_t -= delta
+	var k := sin(clampf(_flinch_t / 0.35, 0.0, 1.0) * PI)
+	for role in ["Spine1", "Spine2"]:
+		var i: int = bones.get(role, -1)
+		if i < 0:
+			continue
+		var gb := skel.get_bone_global_pose(i).basis.orthonormalized()
+		var axis := (gb.inverse() * R).normalized()
+		var twist := (gb.inverse() * U).normalized()
+		var q := Quaternion(axis, -0.22 * k) * Quaternion(twist, 0.18 * k * _flinch_side)
+		skel.set_bone_pose_rotation(i, skel.get_bone_pose_rotation(i) * q)
 
 
 ## Слой рук: перезарядка — клипом; прицел и выстрел — вытянутой правой рукой

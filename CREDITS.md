@@ -55,6 +55,9 @@
 | коровий череп | [Low Poly Cow Skull](https://sketchfab.com/3d-models/0a7e982c5e88468f8bafe2f11c8b9972) | Tohst | CC Attribution |
 | корыто | [Water Trough - Low Poly Medieval](https://sketchfab.com/3d-models/2ba720b8921543b69edad075b9d7c5c5) | Avramania | CC0 |
 | ветряк с водокачкой | [Old West Windmill & Water Tower](https://sketchfab.com/3d-models/d1713e0e1d2642a88e1d243650e4869d) | DanielGrps | CC Attribution |
+| зал салуна | [Saloon Modular Interior (Assembled)](https://sketchfab.com/3d-models/e6ff2f0ba0b14289b9eea8728d38eda6) | lollidrops | CC Attribution |
+| пианино | [Piano](https://sketchfab.com/3d-models/d9421858c0384ef8876bf76ca8d20e68) | Khatagames | CC Attribution |
+| горожанка | [Girl with clothes. Worker set](https://sketchfab.com/3d-models/4cf10e2dde6d4b12b6dccd25a4cf3b77) | cattleya | CC Attribution |
 | горожанин-бородач | [Bearded man - Low poly animated](https://sketchfab.com/3d-models/bearded-man-low-poly-animated-5718a53d18a142f686b1d9f02a637773) | Agor_ | CC Attribution |
 
 ## Шрифты

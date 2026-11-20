@@ -47,6 +47,13 @@ var pose_mode := "" # "" — ходит; "sit" — сидит; "stand" — ст�
 var indoor := false
 var seat_h := 0.62 # высота сиденья для pose_mode = "sit"
 var _was_engaged := false
+# укрытия в перестрелке (бандиты в лагере)
+var _has_cover := false
+var _at_cover := false
+var _cover_pos := Vector3.ZERO
+var _cover_think := 0.0
+var _peek_t := 0.0
+var _peeking := false
 var _was_fleeing := false
 var _chat_t := 0.0
 
@@ -173,6 +180,9 @@ func _physics_process(delta: float) -> void:
 	var mv := Vector3.ZERO
 	var spd: float = k["spd"]
 
+	if not engage and model.crouch > 0.0:
+		model.crouch = 0.0
+		_has_cover = false
 	if engage:
 		aggro = true
 		var dir := to_p / maxf(d, 0.01)
@@ -191,6 +201,15 @@ func _physics_process(delta: float) -> void:
 		mv = dir * f + side * strafe * 0.6
 		if kind == "lawman" and f == 0.0:
 			spd *= 0.35
+		var can_shoot := _cover_logic(delta, p, k)
+		if not can_shoot and _has_cover and _at_cover:
+			mv = Vector3.ZERO
+		elif _has_cover and not _at_cover:
+			var tc := _cover_pos - global_position
+			tc.y = 0.0
+			mv = tc.normalized()
+			spd = float(k["spd"]) * 1.3
+			yaw = atan2(-mv.x, -mv.z) # бежит лицом вперёд
 		if reload > 0.0:
 			reload -= delta
 			if reload <= 0.0:
@@ -199,7 +218,7 @@ func _physics_process(delta: float) -> void:
 			cd -= delta
 			var eye := global_position + Vector3(0, head_height(), 0)
 			var target: Vector3 = p.global_position + Vector3(0, 1.3 if not p.mounted else 2.3, 0)
-			if cd <= 0.0 and d < 70.0 and Game.world.has_los(eye, target):
+			if can_shoot and cd <= 0.0 and d < 70.0 and Game.world.has_los(eye, target):
 				_shoot_at(p, target, d, k["dmg"])
 				clip -= 1
 				var c: Vector2 = k["cd"]
@@ -263,6 +282,65 @@ func _physics_process(delta: float) -> void:
 		horse_model.animate(real_speed, delta)
 
 
+## Бандит выбирает укрытие по другую сторону от героя, перебегает к нему,
+## прячется (присев, перезаряжаясь) и высовывается для выстрелов.
+## Возвращает, можно ли сейчас стрелять.
+func _cover_logic(delta: float, p, k: Dictionary) -> bool:
+	if camp == null or not (kind in ["bandit", "leader"]):
+		return true
+	_cover_think -= delta
+	if _cover_think <= 0.0:
+		_cover_think = randf_range(2.5, 4.5)
+		_pick_cover(p.global_position)
+	if not _has_cover:
+		model.crouch = 0.0
+		return true
+	var tc := _cover_pos - global_position
+	tc.y = 0.0
+	_at_cover = tc.length() < 0.6
+	if not _at_cover:
+		model.crouch = 0.0
+		return false # бежит к укрытию
+	_peek_t -= delta
+	if _peek_t <= 0.0:
+		_peeking = not _peeking
+		_peek_t = randf_range(1.6, 2.8) if _peeking else randf_range(1.2, 2.4)
+	if _peeking:
+		model.crouch = 0.0
+		return true
+	model.crouch = 1.0
+	if clip < 4 and reload <= 0.0:
+		reload = 1.6
+	return false
+
+
+func _pick_cover(threat: Vector3) -> void:
+	var best := INF
+	var best_p := Vector3.ZERO
+	var mates: Array = Game.world.camp_members(camp)
+	for c in camp.cover:
+		var center: Vector3 = camp.to_global(c[0])
+		var away := center - threat
+		away.y = 0.0
+		if away.length() < 6.0:
+			continue # герой уже у самого укрытия
+		var spot: Vector3 = center + away.normalized() * (float(c[1]) + 0.75)
+		spot.y = Game.world.ground(spot.x, spot.z)
+		var taken := false
+		for m in mates:
+			if m != self and not m.dead and m._has_cover and m._cover_pos.distance_to(spot) < 1.4:
+				taken = true
+		if taken:
+			continue
+		var dd := spot.distance_to(global_position)
+		if dd < best:
+			best = dd
+			best_p = spot
+	_has_cover = best < 22.0
+	if _has_cover:
+		_cover_pos = best_p
+
+
 ## Сказать фразу n своим голосом (с паузой между фразами одного персонажа).
 func talk(n: int, cdv := 5.0) -> bool:
 	if voice == "" or dead:
@@ -321,7 +399,7 @@ func _shoot_at(p, target: Vector3, d: float, dmg: float) -> void:
 	var from: Vector3 = model.gun_pos()
 	var end := target
 	if randf() < chance:
-		p.hurt(dmg)
+		p.hurt(dmg, global_position)
 	else:
 		end = target + Vector3(randf_range(-1.5, 1.5), randf_range(-0.8, 1.2), randf_range(-1.5, 1.5)) + (target - from).normalized() * 6.0
 		# пуля просвистела рядом с героем
@@ -343,6 +421,9 @@ func take_hit(dmg: float, by_player: bool) -> void:
 	hp -= dmg
 	aggro = true
 	Game.world.fx.blood(global_position + Vector3(0, 1.3, 0))
+	if hp > 0.0 and model:
+		model.flinch()
+		_cover_think = minf(_cover_think, 0.4)
 	if hp > 0.0 and kind != "folk":
 		Game.play_at("hurt", global_position + Vector3(0, 1.6, 0), -4.0, randf_range(0.85, 1.15), 10.0)
 		if randf() < 0.45:

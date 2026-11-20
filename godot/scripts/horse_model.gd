@@ -26,6 +26,7 @@ var _bind_bone := PackedInt32Array()
 var rider: Node3D = null # всадник, которого конь держит в седле
 var rider_hip := 0.0 # высота сустава бедра всадника над его «нулём»
 var rider_sit := 0.0 # от поверхности седла до сустава бедра
+var _override_t := 0.0 # идёт разовый клип (дыбы), обычные не выбираются
 var _dust: CPUParticles3D
 var _splash_t := 0.0
 
@@ -107,6 +108,10 @@ func _play(n: String, rate: float, blend := 0.3) -> void:
 func animate(speed: float, delta: float) -> void:
 	if ap == null:
 		return
+	if _override_t > 0.0:
+		_override_t -= delta
+		_hoof_fx(speed, delta)
+		return
 	var yaw := rotation.y
 	if delta > 0.0:
 		var dy := wrapf(yaw - _last_yaw, -PI, PI) / delta
@@ -146,6 +151,17 @@ func _hoof_fx(speed: float, delta: float) -> void:
 			Game.world.fx.splash(Vector3(p.x, -0.45, p.z), speed > 6.0)
 			if randf() < 0.5:
 				Game.play_at("splash", p, -10.0, randf_range(0.8, 1.2), 6.0)
+
+
+## Разовый клип (например, «Buck_1» — встаёт на дыбы).
+func play_once(n: String) -> void:
+	var a := _anim(n)
+	if a == "" or _override_t > 0.0:
+		return
+	_current = n
+	ap.play(a, 0.15)
+	ap.speed_scale = 1.0
+	_override_t = ap.get_animation(a).length * 0.95
 
 
 func play_death() -> void:

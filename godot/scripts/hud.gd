@@ -8,7 +8,7 @@ const WOOD := Color("6b4423")
 const WOOD2 := Color("8a5a2f")
 const BOUNTY_NAMES := ["Эйб «Хромой» Таттл", "Сайлас Грач", "Вдова Мэг Холлоуэй", "Эзра Шрам", "Билли Две Луны", "Кальвин «Пастор» Ридж", "Хуан Ферро", "Одноглазый Норрис"]
 
-const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Business Man» (manoeldarochadeoliveira), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; горожанин «Bearded man» — Agor_; реквизит: «Wooden Barrels», «Dead Tree» — MaX3Dd; «Old wooden Wagon» — Peter.Nox; «Fence and Gate (Wood)» — trentspice; «Hitching Post» — Ellen_Ennest; «Water Trough» (CC0) — Avramania; «Old West Windmill & Water Tower» — DanielGrps; «Low Poly: Dead Tree» — clintonabbott.art; «Low Poly Cow Skull» — Tohst; «LP_Oil_Lantern» — Vitor.Gomes1; «Old gallows» — adam127; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog. Звуки, музыка и голоса — ElevenLabs. Шрифты Old Standard TT и PT Sans Narrow — SIL OFL."
+const CREDITS := "3D-модели (Sketchfab, CC BY 4.0): конь «Horse» — henry_7; анимации людей — «Bearded man» (Agor_), «Business Man» (manoeldarochadeoliveira), «Police_ru combat online» (eqisX); ковбой «Western Cowboy (Rigged)» — stevedaman; «Lowpoly cowboy» — Sololopenko; «Low Poly Colt Single-Action Army» — TastyTony; «Old Western Bank» — elvair; «General Store» — sixpence; «Western Town House 1» — FearlessAstroStar; «Western church», «Wanted Table» — adam127; «Low Poly Western Watertower» — staticcc; «Stagecoach» — Tuuttipingu; «Wooden Covered Wagon» — BytesCrafter; «Stylized Rocks Asset Pack» — deadzik; «Low Poly Western» — gallacs; горожанин «Bearded man» — Agor_; горожанка «Girl with clothes. Worker set» — cattleya; зал салуна «Saloon Modular Interior» — lollidrops; «Piano» — Khatagames; реквизит: «Wooden Barrels», «Dead Tree» — MaX3Dd; «Old wooden Wagon» — Peter.Nox; «Fence and Gate (Wood)» — trentspice; «Hitching Post» — Ellen_Ennest; «Water Trough» (CC0) — Avramania; «Old West Windmill & Water Tower» — DanielGrps; «Low Poly: Dead Tree» — clintonabbott.art; «Low Poly Cow Skull» — Tohst; «LP_Oil_Lantern» — Vitor.Gomes1; «Old gallows» — adam127; животные: вилорог — WildMesh_3D, койот — tech.service.allwe, корова — rukh3d, орёл — GremorySaiyan, заяц — bluekiwi.dog. Звуки, музыка и голоса — ElevenLabs. Шрифты Old Standard TT и PT Sans Narrow — SIL OFL."
 const MinimapScript := preload("res://scripts/minimap.gd")
 const TouchScript := preload("res://scripts/touch.gd")
 
@@ -24,6 +24,7 @@ var font: Font
 var tfont: Font # заголовки
 var hit_t := 0.0 # отметка попадания у прицела
 var hit_kill := false
+var _dmg_dirs: Array = [] # [угол относительно взгляда, остаток]
 var _fade := 0.0 # затемнение экрана при переходах
 var _fade_dir := 0.0
 var _fade_cb: Callable
@@ -57,6 +58,13 @@ func _on_toast(text: String, color: Color) -> void:
 		toasts.pop_front()
 
 
+## Откуда прилетел урон (угол относительно направления камеры).
+func damage_from(angle: float) -> void:
+	_dmg_dirs.append([angle, 1.2])
+	if _dmg_dirs.size() > 4:
+		_dmg_dirs.pop_front()
+
+
 ## Плавно затемнить экран, сделать cb (например, перенести героя), открыть.
 func fade(cb: Callable) -> void:
 	_fade_cb = cb
@@ -76,6 +84,10 @@ func ui_open() -> bool:
 func _process(delta: float) -> void:
 	var real := delta / maxf(Engine.time_scale, 0.01)
 	hit_t = maxf(0.0, hit_t - real)
+	for d in _dmg_dirs:
+		d[1] -= real
+	while not _dmg_dirs.is_empty() and _dmg_dirs[0][1] <= 0.0:
+		_dmg_dirs.pop_front()
 	if _fade_dir != 0.0:
 		_fade = clampf(_fade + _fade_dir * real * 3.0, 0.0, 1.0)
 		if _fade >= 1.0 and _fade_dir > 0.0:
@@ -488,6 +500,14 @@ func _draw() -> void:
 				draw_line(sp + Vector2(10, -10), sp + Vector2(-10, 10), Color(0.1, 0.0, 0.0, 0.7), 7.0)
 				draw_line(sp + Vector2(-9, -9), sp + Vector2(9, 9), Color("e0261a"), 4.0)
 				draw_line(sp + Vector2(9, -9), sp + Vector2(-9, 9), Color("e0261a"), 4.0)
+
+	# откуда стреляют: красные дуги вокруг центра экрана
+	for d in _dmg_dirs:
+		var a: float = -PI / 2.0 - d[0]
+		var al := minf(1.0, d[1])
+		var rr := minf(W.x, W.y) * 0.22
+		draw_arc(W / 2.0, rr, a - 0.35, a + 0.35, 16, Color(0.1, 0.0, 0.0, 0.5 * al), 12.0)
+		draw_arc(W / 2.0, rr, a - 0.32, a + 0.32, 16, Color(0.9, 0.12, 0.08, 0.85 * al), 7.0)
 
 	# прицел: точка, при наведении на цель — красный и раскрывается
 	if not pl.dead and not big_map:

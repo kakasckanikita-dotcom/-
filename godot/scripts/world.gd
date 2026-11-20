@@ -891,6 +891,9 @@ func scare_animals(p: Vector3, radius: float) -> void:
 	for a in get_tree().get_nodes_in_group("animals"):
 		if a.global_position.distance_to(p) < radius:
 			a.scare()
+	# свой конь (не под седлом) пугается выстрелов вблизи
+	if not player.mounted and horse.global_position.distance_to(p) < 25.0 and randf() < 0.6:
+		horse.spook(p)
 
 
 func drop_pelt(p: Vector3, money: int, animal_name: String) -> Node3D:

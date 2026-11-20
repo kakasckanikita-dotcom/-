@@ -10,6 +10,7 @@ var flame: MeshInstance3D
 var light: OmniLight3D
 var fire_snd: AudioStreamPlayer3D
 var t := 0.0
+var cover: Array = [] # укрытия: [центр (локально), радиус]
 
 
 func _ready() -> void:
@@ -34,6 +35,7 @@ func _ready() -> void:
 		cs.position = pos + Vector3(0, 1.0, 0)
 		cs.rotation.y = -a
 		body.add_child(cs)
+		cover.append([pos, 1.9])
 	for k in 2:
 		Mk.cyl(self, 0.12, 0.12, 1.4, Vector3(0, 0.15, 0), Color("4a2e18"), 6, Vector3(0, k * PI / 2.0, PI / 2.0))
 	for k in 8:
@@ -51,6 +53,22 @@ func _ready() -> void:
 	wcs.shape = wbs
 	wcs.position = wagon.position + Vector3(0, ws.y / 2.0, 0)
 	body.add_child(wcs)
+	cover.append([wagon.position, maxf(ws.x, ws.z) * 0.4])
+	# штабеля бочек по краю лагеря — укрытия для перестрелки
+	for k in 4:
+		var a := k * TAU / 4.0 + r.randf_range(0.3, 1.2)
+		var cp := Vector3(cos(a), 0, sin(a)) * r.randf_range(13.0, 16.0)
+		for j in 3:
+			var bar := Models.prop("p_barrels", r.randf_range(1.0, 1.25), "h", r.randf() * TAU)
+			bar.position = cp + Vector3(r.randf_range(-0.6, 0.6), 0, r.randf_range(-0.6, 0.6))
+			add_child(bar)
+		var ccs := CollisionShape3D.new()
+		var cbs := BoxShape3D.new()
+		cbs.size = Vector3(1.7, 1.2, 1.7)
+		ccs.shape = cbs
+		ccs.position = cp + Vector3(0, 0.6, 0)
+		body.add_child(ccs)
+		cover.append([cp, 1.0])
 	var loot_names := ["Box", "Box2", "Box3", "Barrel", "BigDynamite", "Box"]
 	for k in loot_names.size():
 		var a := r.randf() * TAU

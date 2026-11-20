@@ -8,6 +8,8 @@ var called := false
 var horse_name := "Буран"
 var model: Node3D
 var _snort_t := 12.0
+var _spook_t := 0.0 # испугался выстрела: дыбы, потом отбегает
+var _spook_dir := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -33,6 +35,19 @@ func _physics_process(delta: float) -> void:
 	to.y = 0.0
 	var d := to.length()
 	var spd := 0.0
+	if _spook_t > 0.0 and not called:
+		_spook_t -= delta
+		if _spook_t < 2.4:
+			# отбегает от выстрела
+			spd = 9.0 * clampf(_spook_t, 0.0, 1.0)
+			yaw = lerp_angle(yaw, atan2(-_spook_dir.x, -_spook_dir.z), minf(1.0, delta * 5.0))
+			velocity = Vector3(-sin(yaw), 0, -cos(yaw)) * spd
+			var b0 := global_position
+			move_and_slide()
+			Game.world.ground_move(self, b0)
+		model.rotation.y = yaw
+		model.animate(spd, delta)
+		return
 	if called and d > 3.5:
 		var dir := to / d
 		spd = 13.0 if d > 20.0 else 4.0
@@ -54,3 +69,15 @@ func _physics_process(delta: float) -> void:
 			Game.play_at("snort", global_position + Vector3(0, 1.6, 0), -6.0, randf_range(0.9, 1.1), 6.0)
 	model.rotation.y = yaw
 	model.animate(spd, delta)
+
+
+## Выстрел рядом: конь встаёт на дыбы, ржёт и отбегает в сторону.
+func spook(from: Vector3) -> void:
+	if called or _spook_t > 0.0 or not visible:
+		return
+	_spook_t = 3.6
+	var away := global_position - from
+	away.y = 0.0
+	_spook_dir = away.normalized() if away.length() > 0.1 else Vector3.FORWARD
+	model.play_once("Buck_1")
+	Game.play_at("neigh", global_position + Vector3(0, 1.8, 0), 0.0, randf_range(0.9, 1.1), 14.0)

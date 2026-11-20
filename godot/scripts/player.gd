@@ -16,6 +16,7 @@ var pitch := -0.25
 var face_yaw := 0.0 # куда смотрит герой
 var horse_yaw := 0.0
 var aim_t := 0.0
+var recoil := 0.0 # отдача: камера подскакивает и плавно возвращается
 var mounted := false
 var dead := false
 var dead_t := 0.0
@@ -219,7 +220,8 @@ func _physics_process(delta: float) -> void:
 func _update_camera(real: float) -> void:
 	rig.global_position = rig.global_position.lerp(global_position, minf(1.0, real * 12.0))
 	rig.rotation = Vector3(0, yaw, 0)
-	pivot.rotation.x = pitch
+	recoil = move_toward(recoil, 0.0, real * (0.35 + recoil * 4.0))
+	pivot.rotation.x = pitch + recoil
 	var want_len := 6.0 if mounted else 4.2
 	var want_h := 2.7 if mounted else 1.75
 	if focus_on:
@@ -398,6 +400,7 @@ func shoot() -> void:
 	Game.play("shot", -2.0, randf_range(0.9, 1.1))
 	model.shoot_anim()
 	shake = 3.0
+	recoil = minf(recoil + 0.05, 0.12)
 	Game.world.alert_town(global_position)
 	Game.world.scare_animals(global_position, 70.0)
 	if Game.clip == 0:
@@ -541,9 +544,16 @@ func _finish_dismount() -> void:
 	velocity = Vector3.ZERO
 
 
-func hurt(dmg: float) -> void:
+func hurt(dmg: float, from := Vector3.INF) -> void:
 	if dead:
 		return
+	if from != Vector3.INF:
+		var to := from - global_position
+		Game.world.hud.damage_from(atan2(-to.x, -to.z) - yaw)
+	# конь под всадником шарахается от ранения
+	if mounted and mount_dir == 0 and randf() < 0.25:
+		horse_model.play_once("Buck_2")
+		Game.play_at("neigh", global_position + Vector3(0, 2.0, 0), -2.0, randf_range(0.9, 1.1), 12.0)
 	Game.hp -= dmg
 	last_hit = clock
 	flash = 0.35
