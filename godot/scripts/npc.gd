@@ -107,7 +107,10 @@ func rebuild() -> void:
 	model.build("npc", height, tint, kind != "folk")
 	if mounted:
 		model.mounted = true
-		model.position = horse_model.rider_pos(yaw, model.hip_y)
+		model.position = horse_model.rider_pos(yaw, model.hip_y, model.sit_h)
+		horse_model.rider = model
+		horse_model.rider_hip = model.hip_y
+		horse_model.rider_sit = model.sit_h
 	if npc_name != "":
 		name_label = Label3D.new()
 		name_label.text = npc_name
@@ -232,7 +235,7 @@ func _physics_process(delta: float) -> void:
 	if horse_model:
 		horse_model.rotation.y = model.rotation.y
 		if not dead:
-			model.position = horse_model.rider_pos(model.rotation.y, model.hip_y)
+			model.position = horse_model.rider_pos(model.rotation.y, model.hip_y, model.sit_h)
 		horse_model.animate(real_speed, delta)
 
 
@@ -340,6 +343,7 @@ func _die(by_player: bool) -> void:
 	collision_mask = 0
 	if mounted:
 		model.mounted = false
+		horse_model.rider = null
 		model.position = Vector3(1.4, 0, 0)
 	model.set_dead(true)
 	Game.play_at("death", global_position + Vector3(0, 1.4, 0), -2.0, randf_range(0.9, 1.1), 10.0)
@@ -377,3 +381,6 @@ func revive() -> void:
 	collision_mask = 1 | 2 | 4
 	aggro = false
 	model.set_dead(false)
+	if mounted:
+		model.mounted = true
+		horse_model.rider = model

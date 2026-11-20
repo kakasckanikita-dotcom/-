@@ -27,7 +27,9 @@ var U := Vector3.UP
 var F := Vector3.FORWARD
 var _B := Basis()
 var _Bi := Basis()
+const SIT_PAD := 0.085 # от тазобедренного сустава до седла (кость + мягкие ткани)
 var hip_y := 0.95 # высота бёдер над землёй после нормализации
+var sit_h := 0.17 # сидя: от поверхности седла до кости Hips
 var _hip_h := 1.0 # то же в единицах скелета
 var _ri := [] # индекс роли -> индекс кости (или −1)
 var _rp := [] # индекс роли -> индекс роли-родителя (или −1)
@@ -148,6 +150,9 @@ func build(model: String, height := 1.8, tint := Color.WHITE, with_gun := true) 
 	var hips_p := xf * _gp("Hips")
 	fix.position = Vector3(-hips_p.x, -foot_p.y + 0.1, -hips_p.z)
 	hip_y = hips_p.y - foot_p.y + 0.1
+	# сидя человек опирается на седалищные кости: чуть ниже тазобедренных суставов
+	var ul := xf * ((_gp("LeftUpLeg") + _gp("RightUpLeg")) * 0.5)
+	sit_h = (hips_p.y - ul.y) + SIT_PAD * height / 1.8
 	_hip_h = _gp("Hips").dot(U) - foot
 	# таблицы для быстрого применения анимаций
 	for r in ANIM_ROLES:
@@ -403,10 +408,12 @@ func _animate_mounted(speed: float, delta: float) -> void:
 		_aim_arm(glob)
 	else:
 		# руки держат поводья
-		var al := _aim("LeftArm", "LeftForeArm", -U * 0.8 + F * 0.35 + L * 0.12)
-		_aim("LeftForeArm", "LeftHand", F * 0.9 - U * 0.25 + R * 0.3, al)
-		var ar := _aim("RightArm", "RightForeArm", -U * 0.8 + F * 0.35 + R * 0.12)
-		_aim("RightForeArm", "RightHand", F * 0.9 - U * 0.25 + L * 0.3, ar)
+		# плечо почти отвесно, локти у боков, предплечья вперёд-внутрь:
+		# кисти сходятся над передней лукой седла
+		var al := _aim("LeftArm", "LeftForeArm", -U * 0.95 + F * 0.12 + L * 0.1)
+		_aim("LeftForeArm", "LeftHand", F * 0.8 - U * 0.12 + R * 0.38, al)
+		var ar := _aim("RightArm", "RightForeArm", -U * 0.95 + F * 0.12 + R * 0.1)
+		_aim("RightForeArm", "RightHand", F * 0.8 - U * 0.12 + L * 0.38, ar)
 
 
 ## Повернуть кость так, чтобы она смотрела в dir (пространство скелета).

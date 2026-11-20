@@ -19,11 +19,19 @@ var _current := ""
 var _turn := 0.0
 var _last_yaw := 0.0
 var _idle_t := 0.0
+var _seat_v: Array = [] # вершины седла: [позиция, [индексы бинда], [веса]]
+var _seat_off := Vector3.ZERO # от среднего этих вершин до точки сиденья
+var _saddle_mi: MeshInstance3D
+var _bind_bone := PackedInt32Array()
+var rider: Node3D = null # всадник, которого конь держит в седле
+var rider_hip := 0.0 # высота сустава бедра всадника над его «нулём»
+var rider_sit := 0.0 # от поверхности седла до сустава бедра
 var _dust: CPUParticles3D
 var _splash_t := 0.0
 
 
 func _ready() -> void:
+	process_priority = 10 # после AnimationPlayer: поза седла уже текущая
 	model = SCENE.instantiate()
 	var fix := Node3D.new()
 	add_child(fix)
@@ -55,19 +63,10 @@ func _ready() -> void:
 			low = minf(low, _bone_pos_i(i).y)
 	var cz := (head.z + pelvis.z + 0.45) / 2.0
 	fix.position = Vector3(-(head.x + pelvis.x) / 2.0, -low + 0.04, -cz)
-	# седло: над серединой спины (кости Spine идут от крупа к шее)
-	var bi := _bone("Spine_02")
-	var att := BoneAttachment3D.new()
-	skel.add_child(att)
-	att.bone_idx = bi
-	seat = Node3D.new()
-	att.add_child(seat)
-	var spine := _bone_pos_i(bi)
-	var want := Vector3(spine.x, spine.y + 0.2, spine.z + 0.15)
-	var att_g := skel.global_transform * skel.get_bone_global_pose(bi)
-	seat.transform = att_g.affine_inverse() * Transform3D(Basis(), to_global(want))
-	seat_y = want.y
-	seat_z = want.z
+	# седло: точка сиденья берётся с настоящей поверхности седла (меш Saddle1) —
+	# несколько вершин в ложбине между луками, которые каждый кадр пересчитываются
+	# по костям скелета, так что точка двигается вместе с седлом на любом аллюре
+	_setup_seat()
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
@@ -155,7 +154,118 @@ func play_death() -> void:
 	ap.play(_anim("Death"), 0.2)
 
 
-## Куда поставить всадника (в координатах родителя коня): бёдра — на седло.
-func rider_pos(_yaw: float, hip_y: float) -> Vector3:
+## Куда поставить всадника (в координатах родителя коня): ягодицы — на седло.
+func rider_pos(_yaw: float, hip_y: float, sit := -1.0) -> Vector3:
 	var p := get_parent() as Node3D
-	return p.to_local(seat.global_position) - Vector3(0, hip_y, 0)
+	return p.to_local(seat_global()) - Vector3(0, hip_y - (sit if sit >= 0.0 else rider_sit), 0)
+
+
+## Точка сиденья в мире — по текущей позе скелета (без отставания на кадр).
+func seat_global() -> Vector3:
+	if _seat_v.is_empty():
+		return seat.global_position
+	var mats := {}
+	var acc := Vector3.ZERO
+	for v in _seat_v:
+		var pos := Vector3.ZERO
+		var bs: Array = v[1]
+		var ws: Array = v[2]
+		for j in bs.size():
+			var b: int = bs[j]
+			if not mats.has(b):
+				mats[b] = skel.get_bone_global_pose(_bind_bone[b]) * _saddle_mi.skin.get_bind_pose(b)
+			pos += (mats[b] * (v[0] as Vector3)) * float(ws[j])
+		acc += pos
+	acc /= float(_seat_v.size())
+	return skel.global_transform * (acc + skel.global_transform.basis.inverse() * (global_basis * _seat_off))
+
+
+func _setup_seat() -> void:
+	# запасной вариант — кость спины
+	var bi := _bone("Spine_02")
+	var att := BoneAttachment3D.new()
+	skel.add_child(att)
+	att.bone_idx = bi
+	seat = Node3D.new()
+	att.add_child(seat)
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh and mi.mesh.resource_name.contains("Saddle1") and mi.skin:
+			_saddle_mi = mi
+	if _saddle_mi == null:
+		return
+	var skin := _saddle_mi.skin
+	_bind_bone.resize(skin.get_bind_count())
+	for b in skin.get_bind_count():
+		var bone := skin.get_bind_bone(b)
+		_bind_bone[b] = bone if bone >= 0 else skel.find_bone(skin.get_bind_name(b))
+	var arr := _saddle_mi.mesh.surface_get_arrays(0)
+	var V: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var B = arr[Mesh.ARRAY_BONES]
+	var W = arr[Mesh.ARRAY_WEIGHTS]
+	if V.is_empty() or W.is_empty():
+		return
+	var nb: int = W.size() / V.size()
+	# все вершины в координатах коня (поза стойки)
+	var loc := PackedVector3Array()
+	loc.resize(V.size())
+	var cx := 0.0
+	var zmin := INF
+	var zmax := -INF
+	for i in V.size():
+		var p := Vector3.ZERO
+		for j in nb:
+			var w: float = W[i * nb + j]
+			if w > 0.0:
+				p += (skel.get_bone_global_pose(_bind_bone[B[i * nb + j]]) * skin.get_bind_pose(B[i * nb + j]) * V[i]) * w
+		var l := to_local(skel.global_transform * p)
+		loc[i] = l
+		cx += l.x
+		zmin = minf(zmin, l.z)
+		zmax = maxf(zmax, l.z)
+	cx /= V.size()
+	# ложбина сиденья: верх седла по средней линии, самое низкое место между луками
+	var best := Vector3(cx, INF, 0)
+	var n := 24
+	for k in range(int(n * 0.25), int(n * 0.75)):
+		var z0 := lerpf(zmin, zmax, float(k) / n)
+		var z1 := lerpf(zmin, zmax, float(k + 1) / n)
+		var top := -INF
+		for l in loc:
+			if l.z >= z0 and l.z < z1 and absf(l.x - cx) < 0.06:
+				top = maxf(top, l.y)
+		if top > -INF and top < best.y:
+			best = Vector3(cx, top, (z0 + z1) / 2.0)
+	if best.y == INF:
+		return
+	# 12 вершин верхней поверхности рядом с этой точкой
+	var cand := []
+	for i in V.size():
+		var d := loc[i] - best
+		if absf(d.x) < 0.12 and absf(d.z) < 0.12 and d.y > -0.04:
+			cand.append([d.length(), i])
+	cand.sort_custom(func(a, b): return a[0] < b[0])
+	var avg := Vector3.ZERO
+	for c in cand.slice(0, 12):
+		var i: int = c[1]
+		var bs := []
+		var ws := []
+		for j in nb:
+			var w: float = W[i * nb + j]
+			if w > 0.0:
+				bs.append(B[i * nb + j])
+				ws.append(w)
+		_seat_v.append([V[i], bs, ws])
+		avg += loc[i]
+	if _seat_v.is_empty():
+		return
+	avg /= float(_seat_v.size())
+	_seat_off = best - avg
+	seat_y = best.y
+	seat_z = best.z
+
+
+
+## Конь сам держит всадника в седле — после своей анимации в этом же кадре.
+func _process(_delta: float) -> void:
+	if rider and is_instance_valid(rider) and rider.get_parent() == get_parent():
+		rider.position = rider_pos(rotation.y, rider_hip)

@@ -170,8 +170,12 @@ func _physics_process(delta: float) -> void:
 		var gp := global_position
 		var pitch := atan2(Game.world.ground(gp.x + fwd.x * 1.1, gp.z + fwd.z * 1.1) - Game.world.ground(gp.x - fwd.x * 1.1, gp.z - fwd.z * 1.1), 2.2)
 		horse_model.rotation.x = lerpf(horse_model.rotation.x, pitch, minf(1.0, real * 8.0))
-		model.position = horse_model.rider_pos(horse_yaw, model.hip_y)
+		model.position = horse_model.rider_pos(horse_yaw, model.hip_y, model.sit_h)
 		horse_model.animate(speed, real * pfac)
+		# дальше конь сам держит всадника в седле после своей анимации
+		horse_model.rider = model
+		horse_model.rider_hip = model.hip_y
+		horse_model.rider_sit = model.sit_h
 
 	shoot_cd -= real * pfac
 	if reload_t > 0.0:
@@ -471,7 +475,8 @@ func _update_mounting(real: float) -> void:
 	model.mount_k = k
 	model.rotation.y = horse_yaw
 	face_yaw = horse_yaw
-	var seat: Vector3 = horse_model.rider_pos(horse_yaw, model.hip_y)
+	horse_model.rider = null
+	var seat: Vector3 = horse_model.rider_pos(horse_yaw, model.hip_y, model.sit_h)
 	var side := _side_pos()
 	var up := smoothstep(0.15, 0.7, k)
 	var over := smoothstep(0.35, 0.95, k)
