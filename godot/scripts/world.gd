@@ -90,11 +90,34 @@ func _ready() -> void:
 	add_child(player)
 
 	for t in towns:
-		for i in 7:
-			var n := spawn_npc("folk", _v3(t["pos"] + Vector2(rng.randf_range(-35, 35), rng.randf_range(-6, 6))))
+		var c: Vector2 = t["pos"]
+		# скамейки у домов: [x, z края улицы, лицом (yaw)]
+		var benches := [[c.x + 15.0, c.y - 8.1, PI], [c.x - 30.0, c.y + 8.1, 0.0], [c.x + 30.0, c.y - 8.1, PI]]
+		for bn in benches:
+			_bench(Vector3(bn[0], 0, bn[1]), bn[2])
+		for i in 9:
+			var pos := _v3(c + Vector2(rng.randf_range(-35, 35), rng.randf_range(-6, 6)))
+			var mode := ""
+			var yaw := rng.randf() * TAU
+			if i < 3: # сидят на скамейках
+				pos = Vector3(benches[i][0] + rng.randf_range(-0.4, 0.4), 0, benches[i][1])
+				mode = "sit"
+				yaw = benches[i][2]
+			elif i < 7: # беседуют парами
+				var j := int((i - 3) / 2.0)
+				var pc := c + Vector2(-12.0 + j * 24.0, -2.0 if j == 0 else 3.0)
+				var side := -1.0 if (i - 3) % 2 == 0 else 1.0
+				pos = _v3(pc + Vector2(side * 0.65, 0))
+				mode = "chat"
+				yaw = PI * 0.5 if side < 0 else -PI * 0.5
+			var n := spawn_npc("folk", pos)
 			n.town = t
+			n.pose_mode = mode
+			n.seat_h = 0.5
+			n.yaw = yaw
 			n.tint = FOLK_TINTS[i % FOLK_TINTS.size()]
 			n.rebuild()
+			n.model.rotation.y = yaw
 		var sh: Dictionary = t["buildings"].filter(func(b): return b["type"] == "sheriff")[0]
 		for i in 2:
 			var s := spawn_npc("sheriff", sh["door"] + Vector3(rng.randf_range(-3, 3), 0, 0) + sh["out"] * 3.0)
@@ -389,6 +412,19 @@ func _make_town(town_name: String, c: Vector2) -> void:
 
 
 var town_lights: Array = [] # фонари на крыльцах — зажигаются ночью
+
+
+## Деревянная скамья у стены дома (сиденье на высоте 0,5 м).
+func _bench(p: Vector3, yaw: float) -> void:
+	var b := Node3D.new()
+	b.position = p
+	b.rotation.y = yaw
+	add_child(b)
+	var wood := Color("5e3d22")
+	Mk.box(b, Vector3(1.9, 0.07, 0.42), Vector3(0, 0.47, 0.05), wood)
+	Mk.box(b, Vector3(1.9, 0.4, 0.06), Vector3(0, 0.75, 0.28), wood)
+	for x in [-0.8, 0.8]:
+		Mk.box(b, Vector3(0.07, 0.47, 0.38), Vector3(x, 0.235, 0.05), wood.darkened(0.2))
 
 
 ## Объект из набора с материалом-заменой (для моделей без текстур).

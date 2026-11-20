@@ -64,13 +64,18 @@ func setup(k: String, pos: Vector3) -> void:
 	wt = pos
 	yaw = randf() * TAU
 	cd = randf_range(0.5, 1.5)
-	# горожане разные: часть — бородачи в рубахах
-	if k == "folk" and randf() < 0.5:
-		body = "bearded"
+	# горожане разные: бородачи в рубахах, женщины, ковбои
+	if k == "folk":
+		var r := randf()
+		if r < 0.25:
+			body = "workgirl"
+			height = randf_range(1.6, 1.7)
+		elif r < 0.65:
+			body = "bearded"
 	match k:
 		"bandit": voice = "banda" if randf() < 0.5 else "bandb"
 		"leader": voice = "banda"
-		"folk": voice = "townm"
+		"folk": voice = "townf" if body == "workgirl" else "townm"
 		"sheriff": voice = "sheriff"
 		"lawman": voice = "posse"
 
@@ -155,6 +160,11 @@ func _physics_process(delta: float) -> void:
 		if _think > 0.0:
 			return
 		_think = 0.5
+	if kind == "folk" and flee > 0.0 and not indoor and pose_mode != "":
+		# испугался — встаёт и убегает
+		pose_mode = ""
+		model.seated = false
+		model.position.y = 0.0
 	var k: Dictionary = KINDS[kind]
 	var hostile := kind == "bandit" or kind == "leader" or ((kind == "sheriff" or kind == "lawman") and Game.wanted > 0)
 	if d > 110.0 and kind != "lawman":
@@ -284,17 +294,18 @@ func _voice_update(delta: float, engage: bool, d: float, p) -> void:
 		if kind == "folk":
 			var fleeing := flee > 0.0
 			var pspd: float = Vector2(p.move_vel.x, p.move_vel.z).length()
+			var fem := voice == "townf"
 			if fleeing and not _was_fleeing:
-				talk(5 if randf() < 0.6 else 4, 3.0)
+				talk((4 if randf() < 0.7 else 3) if fem else (5 if randf() < 0.6 else 4), 3.0)
 				_chat_t = randf_range(4.0, 7.0)
-			elif not fleeing and p.mounted and pspd > 6.0 and d < 4.5:
+			elif not fleeing and p.mounted and pspd > 6.0 and d < 4.5 and not fem:
 				if talk(6, 8.0):
 					_chat_t = 8.0
 			elif not fleeing and p.model.aiming and d < 12.0:
-				if talk(4, 6.0):
+				if talk(3 if fem else 4, 6.0):
 					_chat_t = 6.0
 			elif not fleeing and d < 5.0 and Game.wanted == 0:
-				if talk([1, 1, 2, 3].pick_random(), 40.0):
+				if talk([1, 2].pick_random() if fem else [1, 1, 2, 3].pick_random(), 40.0):
 					_chat_t = 12.0
 			_was_fleeing = fleeing
 		elif kind == "sheriff" and d < 6.0 and Game.wanted == 0:
